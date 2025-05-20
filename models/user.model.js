@@ -1,4 +1,3 @@
-// src/models/user.model.js
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/db");
 const bcrypt = require("bcryptjs");
@@ -47,6 +46,43 @@ const User = sequelize.define(
     email_verified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
+    },
+    // Seller specific fields
+    company_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    company_registration_number: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    country_of_registration: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    business_address: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    website_url: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      validate: {
+        isUrl: true,
+      },
+    },
+    license_image_path: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    seller_verified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    seller_approval_status: {
+      type: DataTypes.ENUM("pending", "approved", "rejected"),
+      defaultValue: "pending",
+      allowNull: true,
     },
   },
   {

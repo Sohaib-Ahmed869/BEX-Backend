@@ -12,7 +12,54 @@ const Transaction = require("./transaction.model");
 const TransactionLog = require("./transaction-log.model");
 const RetippingRequest = require("./retipping-request.model");
 const RetippingStatus = require("./retipping-status.model");
+const {
+  Product,
 
+  ProductRetippingDetails,
+} = require("./product.modal");
+const { CartItem, Cart } = require("./cart.model");
+// Cart associations - define these associations in only one place
+Cart.hasMany(CartItem, { foreignKey: "cart_id", as: "items" });
+CartItem.belongsTo(Cart, { foreignKey: "cart_id" });
+
+Cart.belongsToMany(Product, {
+  through: CartItem,
+  foreignKey: "cart_id",
+  otherKey: "product_id",
+});
+
+Product.belongsToMany(Cart, {
+  through: CartItem,
+  foreignKey: "product_id",
+  otherKey: "cart_id",
+});
+Wishlist.hasMany(WishlistItem, {
+  foreignKey: "wishlist_id",
+  as: "items",
+  onDelete: "CASCADE",
+});
+
+WishlistItem.belongsTo(Wishlist, {
+  foreignKey: "wishlist_id",
+  as: "wishlist",
+});
+
+// CartItem to Product relationship
+CartItem.belongsTo(Product, { foreignKey: "product_id" });
+Product.hasMany(CartItem, { foreignKey: "product_id" });
+
+// Product
+// Define associations
+Product.hasOne(ProductRetippingDetails, {
+  foreignKey: "product_id",
+  as: "retipping_details",
+  onDelete: "CASCADE",
+});
+
+ProductRetippingDetails.belongsTo(Product, {
+  foreignKey: "product_id",
+  as: "product",
+});
 // User associations
 User.hasMany(Company, { foreignKey: "user_id" });
 User.hasMany(Listing, { foreignKey: "user_id" });
@@ -90,6 +137,8 @@ module.exports = {
   User,
   Company,
   ProductType,
+  Cart,
+  CartItem,
   ConditionQuestion,
   DrillBit,
   Inventory,
@@ -100,4 +149,6 @@ module.exports = {
   TransactionLog,
   RetippingRequest,
   RetippingStatus,
+  Product,
+  ProductRetippingDetails,
 };

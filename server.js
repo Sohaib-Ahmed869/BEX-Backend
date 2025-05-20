@@ -8,14 +8,15 @@ const passport = require("passport");
 const session = require("express-session");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 require("dotenv").config();
-
+const authRoutes = require("./api/v1/routes/auth.routes");
+const productRoutes = require("./api/v1/routes/product.routes");
+const cartRoutes = require("./api/v1/routes/cart.routes");
 const app = express();
 const PORT = process.env.PORT || 5000;
-
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
   })
 );
@@ -35,6 +36,11 @@ app.use(
   })
 );
 
+// Routes
+// AUTH
+app.use("/api/auth", authRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/cart", cartRoutes);
 // Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
@@ -106,98 +112,6 @@ app.get("/", (req, res) => {
   res.send("BEX API is running");
 });
 
-// Auth routes
-app.post("/api/auth/signup", async (req, res) => {
-  try {
-    const { email, password, first_name, last_name, phone, role } = req.body;
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res
-        .status(400)
-        .json({ message: "User with this email already exists" });
-    }
-
-    // Create a new user
-    const newUser = await User.create({
-      email,
-      password_hash: password, // Model hooks will hash this
-      first_name: first_name || "",
-      last_name: last_name || "",
-      phone: phone || null,
-      role: role || "buyer",
-    });
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { id: newUser.id, email: newUser.email, role: newUser.role },
-      process.env.JWT_SECRET || "bex-jwt-secret-change-this",
-      { expiresIn: "24h" }
-    );
-
-    res.status(201).json({
-      message: "User registered successfully",
-      token,
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        first_name: newUser.first_name,
-        last_name: newUser.last_name,
-        role: newUser.role,
-      },
-    });
-  } catch (error) {
-    console.error("Signup error:", error);
-    res
-      .status(500)
-      .json({ message: "Error creating user", error: error.message });
-  }
-});
-
-// Login route
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    // Find the user
-    const user = await User.findOne({ where: { email } });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Validate password
-    const isValid = await user.validatePassword(password);
-    if (!isValid) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || "bex-jwt-secret-change-this",
-      { expiresIn: "24h" }
-    );
-
-    res.status(200).json({
-      message: "Login successful",
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        role: user.role,
-      },
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    res
-      .status(500)
-      .json({ message: "Error during login", error: error.message });
-  }
-});
-
 // Google OAuth routes
 app.get(
   "/api/auth/google",
@@ -220,7 +134,7 @@ app.get(
     // Redirect to frontend with token
     res.redirect(
       `${
-        process.env.CLIENT_URL || "http://localhost:3000"
+        process.env.CLIENT_URL || "http://localhost:5173"
       }/auth/success?token=${token}`
     );
   }
