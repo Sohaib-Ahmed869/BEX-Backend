@@ -95,6 +95,8 @@ exports.addToWishlist = async (req, res) => {
           wishlist_id: wishlist.id,
           product_id: productId,
           title: productData.title,
+          category: productData.category,
+          diameter: productData.diameter,
           brand: productData.brand || null,
           image_link:
             productData.images && productData.images.length

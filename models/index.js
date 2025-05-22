@@ -7,18 +7,49 @@ const DrillBit = require("./drill-bit.model");
 const Inventory = require("./inventory.model");
 const Listing = require("./listing.model");
 const Order = require("./order.model");
-const OrderItem = require("./order-item.model");
+const OrderItem = require("./orderItem");
 const Transaction = require("./transaction.model");
 const TransactionLog = require("./transaction-log.model");
 const RetippingRequest = require("./retipping-request.model");
 const RetippingStatus = require("./retipping-status.model");
-const {
-  Product,
-
-  ProductRetippingDetails,
-} = require("./product.modal");
+const { Product, ProductRetippingDetails } = require("./product.modal");
 const { CartItem, Cart } = require("./cart.model");
+const { Wishlist, WishlistItem } = require("./wishlist.model");
 // Cart associations - define these associations in only one place
+Order.hasMany(OrderItem, {
+  foreignKey: "order_id",
+  as: "items",
+});
+
+OrderItem.belongsTo(Order, {
+  foreignKey: "order_id",
+});
+
+// Product associations
+OrderItem.belongsTo(Product, {
+  foreignKey: "product_id",
+  as: "product",
+});
+
+Product.hasMany(OrderItem, {
+  foreignKey: "product_id",
+});
+
+// User associations
+User.hasMany(Order, {
+  foreignKey: "buyer_id",
+  as: "orders",
+});
+
+Order.belongsTo(User, {
+  foreignKey: "buyer_id",
+  as: "buyer",
+});
+
+User.hasOne(Cart, {
+  foreignKey: "user_id",
+  as: "cart",
+});
 Cart.hasMany(CartItem, { foreignKey: "cart_id", as: "items" });
 CartItem.belongsTo(Cart, { foreignKey: "cart_id" });
 

@@ -11,6 +11,8 @@ require("dotenv").config();
 const authRoutes = require("./api/v1/routes/auth.routes");
 const productRoutes = require("./api/v1/routes/product.routes");
 const cartRoutes = require("./api/v1/routes/cart.routes");
+const wishlistRoutes = require("./api/v1/routes/wishlist.routes");
+const checkoutRoutes = require("./api/v1/routes/checkout.routes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 // Middleware
@@ -41,6 +43,8 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/checkout", checkoutRoutes);
 // Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());

@@ -59,6 +59,14 @@ const CartItem = sequelize.define(
         key: "id",
       },
     },
+    category: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    diameter: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     title: {
       type: DataTypes.STRING,
       allowNull: false,

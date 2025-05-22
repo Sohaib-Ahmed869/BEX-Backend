@@ -106,10 +106,12 @@ exports.addToCart = async (req, res) => {
           cart_id: cart.id,
           product_id: productId,
           title: productData.title,
+          category: productData.category,
           image_link:
             productData.images && productData.images.length
               ? productData.images[0]
               : null,
+          diameter: productData.diameter,
           price: parseFloat(productData.price),
           quantity: parseInt(quantity, 10),
         },
