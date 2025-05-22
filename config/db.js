@@ -99,10 +99,10 @@ const testConnection = async () => {
     console.log("📊 Connected to PostgreSQL version:", results[0].version);
 
     // Test connection pool
-    const pool = sequelize.connectionManager.pool;
-    console.log(
-      `🏊 Connection pool - Max: ${pool.options.max}, Min: ${pool.options.min}`
-    );
+    // const pool = sequelize.connectionManager.pool;
+    // // console.log(
+    // //   `🏊 Connection pool - Max: ${pool.options.max}, Min: ${pool.options.min}`
+    // // );
 
     return true;
   } catch (error) {
