@@ -84,6 +84,14 @@ const CartItem = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    retip_added: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    retip_price: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
   },
   {
     timestamps: true,

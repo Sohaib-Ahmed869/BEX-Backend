@@ -352,3 +352,180 @@ exports.clearCart = async (req, res) => {
     });
   }
 };
+/**
+ * Add retipping service to a cart item
+ */
+exports.addRetipToItem = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const userId = req.params.userId;
+    const { itemId, retipPrice } = req.body;
+
+    if (!itemId || !retipPrice) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Item ID and retip price are required",
+      });
+    }
+
+    // Get the user's cart
+    const cart = await Cart.findOne({
+      where: { user_id: userId },
+      transaction,
+    });
+
+    if (!cart) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Cart not found",
+      });
+    }
+
+    // Find the cart item
+    const cartItem = await CartItem.findOne({
+      where: { id: itemId, cart_id: cart.id },
+      transaction,
+    });
+
+    if (!cartItem) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Cart item not found",
+      });
+    }
+
+    // Update the cart item with retipping service
+    await cartItem.update(
+      {
+        retip_added: true,
+        retip_price: parseFloat(retipPrice),
+      },
+      { transaction }
+    );
+    console.log("Retipping service added to cart item:", cartItem.id);
+
+    // Get updated cart items for response
+    const updatedCartItems = await CartItem.findAll({
+      where: { cart_id: cart.id },
+      transaction,
+    });
+
+    // Get the updated cart
+    const updatedCart = await Cart.findOne({
+      where: { user_id: userId },
+      transaction,
+    });
+
+    // Create response object
+    const cartResponse = updatedCart.toJSON();
+    cartResponse.items = updatedCartItems;
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: "Retipping service added successfully",
+      data: cartResponse,
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error adding retip to cart item:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * Remove retipping service from a cart item
+ */
+exports.removeRetipFromItem = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const userId = req.params.userId;
+    const { itemId } = req.body;
+
+    if (!itemId) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Item ID is required",
+      });
+    }
+
+    // Get the user's cart
+    const cart = await Cart.findOne({
+      where: { user_id: userId },
+      transaction,
+    });
+
+    if (!cart) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Cart not found",
+      });
+    }
+
+    // Find the cart item
+    const cartItem = await CartItem.findOne({
+      where: { id: itemId, cart_id: cart.id },
+      transaction,
+    });
+
+    if (!cartItem) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Cart item not found",
+      });
+    }
+
+    // Remove retipping service from the cart item
+    await cartItem.update(
+      {
+        retip_added: false,
+        retip_price: null,
+      },
+      { transaction }
+    );
+    console.log("Retipping service removed from cart item:", cartItem.id);
+
+    // Get updated cart items for response
+    const updatedCartItems = await CartItem.findAll({
+      where: { cart_id: cart.id },
+      transaction,
+    });
+
+    // Get the updated cart
+    const updatedCart = await Cart.findOne({
+      where: { user_id: userId },
+      transaction,
+    });
+
+    // Create response object
+    const cartResponse = updatedCart.toJSON();
+    cartResponse.items = updatedCartItems;
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: "Retipping service removed successfully",
+      data: cartResponse,
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error removing retip from cart item:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

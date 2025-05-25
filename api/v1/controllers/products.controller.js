@@ -163,13 +163,19 @@ exports.getAllProducts = async (req, res) => {
 
     let products;
 
+    // Base where condition to exclude archived products
+    const whereCondition = {
+      is_Archived: false, // Only fetch non-archived products
+    };
+
     if (isAssociationDefined) {
       // If association exists, include the retipping details
       products = await Product.findAll({
+        where: whereCondition,
         include: [
           {
             model: ProductRetippingDetails,
-            as: "retippingDetails",
+            as: "retipping_details",
             attributes: [
               "diameter",
               "enable_diy",
@@ -186,6 +192,7 @@ exports.getAllProducts = async (req, res) => {
     } else {
       // If association doesn't exist, fetch products without including retipping details
       products = await Product.findAll({
+        where: whereCondition,
         order: [["created_at", "DESC"]],
         // No user_id filter to get products from all sellers
       });
@@ -195,7 +202,9 @@ exports.getAllProducts = async (req, res) => {
     const uniqueUserIds = [
       ...new Set(products.map((product) => product.user_id)),
     ];
-    console.log(`Found products from ${uniqueUserIds.length} unique sellers`);
+    console.log(
+      `Found ${products.length} non-archived products from ${uniqueUserIds.length} unique sellers`
+    );
 
     return res.status(200).json({
       success: true,
@@ -550,57 +559,41 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
-    // Check if user owns this product - make sure req.user exists
-    // If you're not using authentication middleware, remove this check
-    // if (req.user && product.user_id !== req.user.id) {
-    //   await transaction.rollback();
-    //   return res.status(403).json({
-    //     success: false,
-    //     message: "Not authorized to delete this product",
-    //   });
-    // }
-
-    // Optional: Delete images from S3 if needed
-    if (product.images && product.images.length > 0) {
-      try {
-        // Uncomment and implement if you want to delete images from S3
-        // for (const imageUrl of product.images) {
-        //   await deleteFileFromS3(imageUrl);
-        // }
-      } catch (imageDeleteError) {
-        console.error("Error deleting images from S3:", imageDeleteError);
-        // Continue with product deletion even if image deletion fails
-      }
-    }
-
-    // Check if retipping details exist and delete them
-    const retippingDetails = await ProductRetippingDetails.findOne({
-      where: { product_id: productId },
-      transaction,
-    });
-
-    if (retippingDetails) {
-      await ProductRetippingDetails.destroy({
-        where: { product_id: productId },
-        transaction,
+    // Check if product is already archived
+    if (product.is_Archived) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Product is already archived",
       });
     }
 
-    // Delete the product
-    await product.destroy({ transaction });
+    // Set is_Archived to true instead of deleting
+    await product.update(
+      {
+        is_Archived: true,
+        is_active: false, // Also set to inactive for good measure
+      },
+      { transaction }
+    );
 
     await transaction.commit();
 
     return res.status(200).json({
       success: true,
-      message: "Product and all related data deleted successfully",
+      message: "Product has been removed successfully",
+      data: {
+        productId: product.id,
+        title: product.title,
+        archived: true,
+      },
     });
   } catch (error) {
     await transaction.rollback();
-    console.error("Error deleting product:", error);
-    return res.status(400).json({
+    console.error("Error archiving product:", error);
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Internal server error while removing product",
     });
   }
 };

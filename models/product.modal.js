@@ -64,6 +64,10 @@ const Product = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    is_Archived: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     requires_retipping: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

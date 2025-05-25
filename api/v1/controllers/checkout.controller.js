@@ -77,21 +77,49 @@ exports.createOrder = async (req, res) => {
       );
     }
 
-    // Calculate order totals using the provided items
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
+    // Calculate order totals using the provided items - FIXED CALCULATIONS
+    const subtotal = parseFloat(
+      items
+        .reduce(
+          (sum, item) => sum + parseFloat(item.price) * parseInt(item.quantity),
+          0
+        )
+        .toFixed(2)
     );
 
-    // Calculate retip total if any items have retipping service
-    const retipTotal = items.reduce(
-      (sum, item) => sum + (item.retipAdded ? item.retipPrice || 0 : 0),
-      0
+    // Calculate retip total if any items have retipping service - FIXED
+    const retipTotal = parseFloat(
+      items
+        .reduce((sum, item) => {
+          const retipPrice = item.retipAdded
+            ? parseFloat(item.retipPrice || 0)
+            : 0;
+          const quantity = parseInt(item.quantity);
+          return sum + retipPrice * quantity;
+        }, 0)
+        .toFixed(2)
     );
 
-    const tax = Number.parseFloat((subtotal * 0.0109).toFixed(2)); // Tax rate from frontend
-    const platformFee = Number.parseFloat((subtotal * 0.05).toFixed(2)); // Commission fee
-    const total = subtotal + tax + platformFee + retipTotal;
+    // FIXED: Proper decimal calculations
+    const taxRate = 0.0109;
+    const commissionRate = 0.05;
+
+    const tax = parseFloat((subtotal * taxRate).toFixed(2));
+    const platformFee = parseFloat((subtotal * commissionRate).toFixed(2));
+    const shippingCost = 0.0; // Free shipping
+
+    // FIXED: Final total calculation
+    const total = parseFloat(
+      (subtotal + tax + platformFee + shippingCost + retipTotal).toFixed(2)
+    );
+
+    console.log("Order totals:", {
+      subtotal,
+      retipTotal,
+      tax,
+      platformFee,
+      total,
+    });
 
     // Verify payment with Stripe if needed
     const paymentIntent = await stripe.paymentIntents.retrieve(payment.id);
@@ -100,34 +128,40 @@ exports.createOrder = async (req, res) => {
       throw new Error("Payment has not been completed");
     }
 
-    // Create order record
+    // Create order record - FIXED: Ensure all numeric values are properly formatted
     const order = await Order.create(
       {
         id: uuidv4(),
         buyer_id: userId,
-        total_amount: total,
-        shipping_cost: 0, // Free shipping as per frontend
+        total_amount: total, // Now properly calculated as a clean decimal
+        shipping_cost: shippingCost,
         platform_fee: platformFee,
         status: "paid",
         shipping_address: shipping,
-        requires_retipping: retipTotal > 0, // Set flag if any items need retipping
+        requires_retipping: retipTotal > 0,
         order_date: new Date(),
       },
       { transaction: t }
     );
 
-    // Create order items directly from the provided items
+    // Create order items directly from the provided items - FIXED
     for (const item of items) {
+      const itemPrice = parseFloat(item.price);
+      const itemQuantity = parseInt(item.quantity);
+      const itemRetipPrice = item.retipAdded
+        ? parseFloat(item.retipPrice || 0)
+        : 0;
+
       await OrderItem.create(
         {
           id: uuidv4(),
           order_id: order.id,
           product_id: item.id,
-          quantity: item.quantity,
-          price: item.price,
+          quantity: itemQuantity,
+          price: itemPrice,
           title: item.title,
           retip_added: item.retipAdded || false,
-          retip_price: item.retipAdded ? item.retipPrice || 0 : 0,
+          retip_price: itemRetipPrice,
         },
         { transaction: t }
       );
@@ -150,6 +184,7 @@ exports.createOrder = async (req, res) => {
       orderId: order.id,
       message: "Order created successfully",
       itemsProcessed: items.length,
+      orderTotal: total,
     });
   } catch (error) {
     await t.rollback();
@@ -157,6 +192,7 @@ exports.createOrder = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 /**
  * Get user's order history
  * @route GET /api/checkout/orders
