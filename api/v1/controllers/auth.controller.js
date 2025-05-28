@@ -1,7 +1,44 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("../../../models/user.model");
+const AWS = require("aws-sdk");
+const { v4: uuidv4 } = require("uuid");
+const path = require("path");
 require("dotenv").config();
+
+// Configure AWS S3
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+
+const uploadFileToS3 = async (file) => {
+  // Validate file type
+  const fileExtension = path.extname(file.originalname).toLowerCase();
+  const allowedExtensions = [".jpg", ".jpeg", ".png", ".pdf"];
+
+  if (!allowedExtensions.includes(fileExtension)) {
+    throw new Error(
+      "Invalid file format. Only JPEG, JPG, PNG and PDF are allowed"
+    );
+  }
+
+  // Create unique filename
+  const filename = `${uuidv4()}${fileExtension}`;
+
+  // Upload to S3
+  const uploadParams = {
+    Bucket: process.env.AWS_S3_BUCKET_NAME,
+    Key: `licenses/${filename}`,
+    Body: file.buffer,
+    ContentType: file.mimetype,
+    ACL: "public-read",
+  };
+
+  const result = await s3.upload(uploadParams).promise();
+  return result.Location;
+};
 
 // Register a new user
 const RegisterBuyer = async (req, res) => {
@@ -30,7 +67,7 @@ const RegisterBuyer = async (req, res) => {
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email, role: newUser.role },
       process.env.JWT_SECRET || "bex-jwt-secret-change-this",
-      { expiresIn: "24h" }
+      { expiresIn: "8h" }
     );
 
     res.status(201).json({
@@ -65,6 +102,10 @@ const RegisterSeller = async (req, res) => {
       websiteUrl,
     } = req.body;
 
+    // Debug log to check what we're receiving
+    console.log("Request body:", req.body);
+    console.log("Request file:", req.file);
+
     // Check if user already exists
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
@@ -73,26 +114,19 @@ const RegisterSeller = async (req, res) => {
         .json({ message: "User with this email already exists" });
     }
 
-    // Handle license image upload if provided
-    let licenseImagePath = null;
-    if (req.files && req.files.licenseImage) {
-      const licenseImage = req.files.licenseImage;
-
-      // Create uploads directory if it doesn't exist
-      const uploadsDir = path.join(__dirname, "../uploads/licenses");
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+    // Handle license image upload to S3 if provided
+    let licenseImageUrl = null;
+    if (req.file) {
+      try {
+        licenseImageUrl = await uploadFileToS3(req.file);
+        console.log("License image uploaded successfully:", licenseImageUrl);
+      } catch (uploadError) {
+        console.error("Error uploading license image:", uploadError);
+        return res.status(400).json({
+          message: "Error uploading license image",
+          error: uploadError.message,
+        });
       }
-
-      // Generate unique filename
-      const fileName = `license_${Date.now()}${path.extname(
-        licenseImage.name
-      )}`;
-      const uploadPath = path.join(uploadsDir, fileName);
-
-      // Save the file
-      await licenseImage.mv(uploadPath);
-      licenseImagePath = `/uploads/licenses/${fileName}`;
     }
 
     // Split the name into first name and last name (if provided as a full name)
@@ -117,7 +151,7 @@ const RegisterSeller = async (req, res) => {
       country_of_registration: countryOfRegistration,
       business_address: businessAddress,
       website_url: websiteUrl,
-      license_image_path: licenseImagePath,
+      license_image_path: licenseImageUrl, // Store S3 URL instead of local path
       seller_approval_status: "pending",
     });
 
@@ -129,7 +163,7 @@ const RegisterSeller = async (req, res) => {
         role: newSeller.role,
       },
       process.env.JWT_SECRET || "bex-jwt-secret-change-this",
-      { expiresIn: "24h" }
+      { expiresIn: "8h" }
     );
 
     res.status(201).json({
@@ -152,6 +186,7 @@ const RegisterSeller = async (req, res) => {
       .json({ message: "Error creating seller account", error: error.message });
   }
 };
+
 // Login Function
 const login = async (req, res) => {
   try {
@@ -173,7 +208,7 @@ const login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || "bex-jwt-secret-change-this",
-      { expiresIn: "24h" }
+      { expiresIn: "8h" }
     );
 
     res.status(200).json({

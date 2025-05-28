@@ -2,6 +2,7 @@ const {
   Product,
   ProductRetippingDetails,
 } = require("../../../models/product.modal");
+const { ProductListing } = require("../../../models/ProductListing.model");
 const { sequelize } = require("../../../config/db");
 const AWS = require("aws-sdk");
 const { v4: uuidv4 } = require("uuid");
@@ -93,15 +94,19 @@ exports.addProduct = async (req, res) => {
     const listForSelling =
       productData.list_for_selling === "false" ? false : true;
 
+    // Parse quantity and validate
+    const quantity = parseInt(productData.quantity || 1, 10);
+
     // Create product with specifications directly in the model
     const product = await Product.create(
       {
         user_id: userId,
+        listing_id: productData.listing_id,
         category: productData.category,
         title: productData.title,
         description: productData.description || "",
         price: parseFloat(productData.price),
-        quantity: parseInt(productData.quantity || 1, 10),
+        quantity: quantity,
         condition: productData.condition,
         subtype: productData.subtype || null,
         location: productData.location || null,
@@ -113,6 +118,15 @@ exports.addProduct = async (req, res) => {
       },
       { transaction }
     );
+
+    // Update listing stock if quantity > 0 and listing_id is provided
+    if (quantity > 0 && productData.listing_id) {
+      await ProductListing.increment("Stock", {
+        by: 1, // Increment by 1 (meaning this listing now has 1 more product in stock)
+        where: { id: productData.listing_id },
+        transaction,
+      });
+    }
 
     // Add retipping details if category is Core Drill Bits
     if (productData.category === "Core Drill Bits" && retippingData) {
@@ -568,6 +582,9 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
+    // Store listing_id before archiving the product
+    const listingId = product.listing_id;
+
     // Set is_Archived to true instead of deleting
     await product.update(
       {
@@ -576,6 +593,23 @@ exports.updateProduct = async (req, res) => {
       },
       { transaction }
     );
+
+    // Update listing stock if listing_id exists and product quantity > 0
+    if (listingId && product.quantity > 0) {
+      // First check if the listing exists
+      const listing = await ProductListing.findByPk(listingId, { transaction });
+
+      if (listing) {
+        // Only decrement if current stock is greater than 0 to avoid negative values
+        if (listing.Stock > 0) {
+          await ProductListing.decrement("Stock", {
+            by: 1, // Decrement by 1 (meaning this listing now has 1 less product in stock)
+            where: { id: listingId },
+            transaction,
+          });
+        }
+      }
+    }
 
     await transaction.commit();
 

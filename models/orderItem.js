@@ -46,7 +46,24 @@ const OrderItem = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0.0,
     },
-    // You can add additional fields like discounts, variations, etc.
+    order_status: {
+      type: DataTypes.ENUM(
+        "pending approval",
+        "approved",
+        "rejected",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled"
+      ),
+      defaultValue: "pending approval",
+      allowNull: false,
+    },
+
+    payment_status: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
   },
   {
     timestamps: true,

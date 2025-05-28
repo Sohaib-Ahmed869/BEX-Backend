@@ -136,7 +136,7 @@ exports.createOrder = async (req, res) => {
         total_amount: total, // Now properly calculated as a clean decimal
         shipping_cost: shippingCost,
         platform_fee: platformFee,
-        status: "paid",
+        payment_completed: true,
         shipping_address: shipping,
         requires_retipping: retipTotal > 0,
         order_date: new Date(),
@@ -158,6 +158,8 @@ exports.createOrder = async (req, res) => {
           order_id: order.id,
           product_id: item.id,
           quantity: itemQuantity,
+          order_status: "pending approval",
+          payment_status: true,
           price: itemPrice,
           title: item.title,
           retip_added: item.retipAdded || false,

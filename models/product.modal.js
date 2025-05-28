@@ -17,6 +17,14 @@ const Product = sequelize.define(
         key: "id",
       },
     },
+    listing_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "product_listings",
+        key: "id",
+      },
+    },
     category: {
       type: DataTypes.STRING,
       allowNull: false,

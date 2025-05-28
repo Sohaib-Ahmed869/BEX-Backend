@@ -1,4 +1,3 @@
-// src/models/order.model.js
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/db");
 
@@ -32,17 +31,10 @@ const Order = sequelize.define(
       allowNull: false,
       defaultValue: 0.0,
     },
-    status: {
-      type: DataTypes.ENUM(
-        "pending",
-        "paid",
-        "processing",
-        "shipped",
-        "delivered",
-        "cancelled"
-      ),
-      defaultValue: "pending",
-      allowNull: false,
+
+    payment_completed: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     shipping_address: {
       type: DataTypes.JSONB,
