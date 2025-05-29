@@ -239,7 +239,7 @@ exports.getUserProducts = async (req, res) => {
 
     // Find all products associated with the user ID
     const products = await Product.findAll({
-      where: { user_id: userId },
+      where: { user_id: userId, is_Archived: false },
       order: [["created_at", "DESC"]],
     });
 

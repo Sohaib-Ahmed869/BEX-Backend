@@ -17,6 +17,7 @@ const googleAuthRoutes = require("./api/v1/routes/googleAuth.routes");
 const SellerDashboardRoutes = require("./api/v1/routes/SellerDashboardStats.routes");
 const ProductListingRoutes = require("./api/v1/routes/ProductListings.routes");
 const OrdersRoutes = require("./api/v1/routes/orders.routes");
+const UserRoutes = require("./api/v1/routes/users.routes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 // Middleware
@@ -52,6 +53,7 @@ app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/sellerdashboard", SellerDashboardRoutes);
 app.use("/api/orders", OrdersRoutes);
+app.use("/api/user", UserRoutes);
 app.use(passport.initialize());
 
 // Add Google auth routes
