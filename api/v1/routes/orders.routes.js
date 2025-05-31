@@ -4,12 +4,19 @@ const {
   confirmOrder,
   rejectOrder,
   getSingleOrderItem,
+  getAllOrders,
+  getOrderItemsByOrderId,
 } = require("../controllers/orders.controller");
 const router = express.Router();
 
-router.get("/:userId", getSellerOrders);
+// Specific routes FIRST
+router.get("/get-all-orders", getAllOrders);
+router.get("/order-item/:itemId", getSingleOrderItem);
 router.put("/confirm/:itemId", confirmOrder);
 router.put("/reject/:itemId", rejectOrder);
-router.get("/order-item/:itemId", getSingleOrderItem);
+
+// Parameterized routes LAST
+router.get("/:userId", getSellerOrders);
+router.get("/:orderId/items", getOrderItemsByOrderId);
 
 module.exports = router;

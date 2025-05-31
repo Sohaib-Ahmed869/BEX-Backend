@@ -15,6 +15,7 @@ const wishlistRoutes = require("./api/v1/routes/wishlist.routes");
 const checkoutRoutes = require("./api/v1/routes/checkout.routes");
 const googleAuthRoutes = require("./api/v1/routes/googleAuth.routes");
 const SellerDashboardRoutes = require("./api/v1/routes/SellerDashboardStats.routes");
+const AdminDashboardRoutes = require("./api/v1/routes/AdminDashboardStats.routes");
 const ProductListingRoutes = require("./api/v1/routes/ProductListings.routes");
 const OrdersRoutes = require("./api/v1/routes/orders.routes");
 const UserRoutes = require("./api/v1/routes/users.routes");
@@ -54,6 +55,7 @@ app.use("/api/checkout", checkoutRoutes);
 app.use("/api/sellerdashboard", SellerDashboardRoutes);
 app.use("/api/orders", OrdersRoutes);
 app.use("/api/user", UserRoutes);
+app.use("/api/admin/dashboard", AdminDashboardRoutes);
 app.use(passport.initialize());
 
 // Add Google auth routes

@@ -49,6 +49,7 @@ const OrderItem = sequelize.define(
     order_status: {
       type: DataTypes.ENUM(
         "pending approval",
+        "refunded",
         "approved",
         "rejected",
         "processing",

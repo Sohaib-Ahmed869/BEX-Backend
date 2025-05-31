@@ -124,7 +124,16 @@ User.hasMany(RetippingRequest, {
 User.hasMany(RetippingStatus, {
   foreignKey: "updated_by_user_id",
 });
+// User - Product associations (Seller relationship)
+User.hasMany(Product, {
+  foreignKey: "user_id",
+  as: "products",
+});
 
+Product.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "seller",
+});
 // ProductListing - Product associations (One-to-Many)
 ProductListing.hasMany(Product, {
   foreignKey: "listing_id",

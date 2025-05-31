@@ -79,6 +79,10 @@ const User = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    is_suspended: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     seller_approval_status: {
       type: DataTypes.ENUM("pending", "approved", "rejected"),
       defaultValue: "pending",

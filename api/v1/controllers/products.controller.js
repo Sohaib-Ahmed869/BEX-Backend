@@ -171,11 +171,32 @@ exports.addProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
+    // Extract pagination parameters from query string
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Validate pagination parameters
+    if (page < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Page number must be greater than 0",
+      });
+    }
+
+    if (limit < 1 || limit > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Limit must be between 1 and 100",
+      });
+    }
+
     // First, check if the association exists
     const isAssociationDefined =
       Product.associations && Product.associations.retippingDetails;
 
     let products;
+    let totalCount;
 
     // Base where condition to exclude archived products
     const whereCondition = {
@@ -184,7 +205,7 @@ exports.getAllProducts = async (req, res) => {
 
     if (isAssociationDefined) {
       // If association exists, include the retipping details
-      products = await Product.findAll({
+      const result = await Product.findAndCountAll({
         where: whereCondition,
         include: [
           {
@@ -201,33 +222,56 @@ exports.getAllProducts = async (req, res) => {
           },
         ],
         order: [["created_at", "DESC"]],
-        // No user_id filter to get products from all sellers
+        limit: limit,
+        offset: offset,
+        distinct: true, // Important when using includes to get accurate count
       });
+
+      products = result.rows;
+      totalCount = result.count;
     } else {
       // If association doesn't exist, fetch products without including retipping details
-      products = await Product.findAll({
+      const result = await Product.findAndCountAll({
         where: whereCondition,
         order: [["created_at", "DESC"]],
-        // No user_id filter to get products from all sellers
+        limit: limit,
+        offset: offset,
       });
+
+      products = result.rows;
+      totalCount = result.count;
     }
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
 
     // Log the unique user_ids for debugging
     const uniqueUserIds = [
       ...new Set(products.map((product) => product.user_id)),
     ];
     console.log(
-      `Found ${products.length} non-archived products from ${uniqueUserIds.length} unique sellers`
+      `Found ${products.length} non-archived products from ${uniqueUserIds.length} unique sellers (Page ${page}/${totalPages})`
     );
 
     return res.status(200).json({
       success: true,
-      count: products.length,
       data: products,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalCount: totalCount,
+        limit: limit,
+        hasNextPage: hasNextPage,
+        hasPrevPage: hasPrevPage,
+        nextPage: hasNextPage ? page + 1 : null,
+        prevPage: hasPrevPage ? page - 1 : null,
+      },
     });
   } catch (error) {
     console.error("Error fetching products:", error);
-    return res.status(400).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

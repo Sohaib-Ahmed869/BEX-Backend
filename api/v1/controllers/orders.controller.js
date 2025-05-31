@@ -480,3 +480,418 @@ exports.rejectOrder = async (req, res) => {
     });
   }
 };
+// Admin endpoints for orders
+// Endpoint 1: Get all orders for admin (order-level view with item summaries)
+exports.getAllOrders = async (req, res) => {
+  try {
+    const {
+      status,
+      paymentStatus,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    // Build where clause for filtering orders
+    let orderWhereClause = {};
+
+    // Date filtering
+    if (startDate && endDate) {
+      orderWhereClause.order_date = {
+        [Op.between]: [new Date(startDate), new Date(endDate)],
+      };
+    } else if (startDate) {
+      orderWhereClause.order_date = {
+        [Op.gte]: new Date(startDate),
+      };
+    } else if (endDate) {
+      orderWhereClause.order_date = {
+        [Op.lte]: new Date(endDate),
+      };
+    }
+
+    // Build where clause for filtering order items (if status/payment filters are applied)
+    let orderItemWhereClause = {};
+    let includeItemFilters = false;
+
+    // Status filtering (applies to order items)
+    if (status) {
+      orderItemWhereClause.order_status = status;
+      includeItemFilters = true;
+    }
+
+    // Payment status filtering (applies to order items)
+    if (paymentStatus !== undefined) {
+      orderItemWhereClause.payment_status = paymentStatus === "true";
+      includeItemFilters = true;
+    }
+
+    // Calculate offset for pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build include array for OrderItems
+    const orderItemsInclude = {
+      model: OrderItem,
+      as: "items",
+      include: [
+        {
+          model: Product,
+          as: "product",
+          attributes: [
+            "id",
+            "title",
+            "images",
+            "price",
+            "category",
+            "condition",
+          ],
+        },
+      ],
+    };
+
+    // Add where clause only if filters are applied
+    if (includeItemFilters) {
+      orderItemsInclude.where = orderItemWhereClause;
+    }
+
+    // Get all orders
+    const { count, rows: orders } = await Order.findAndCountAll({
+      include: [
+        orderItemsInclude,
+        {
+          model: User,
+          as: "buyer",
+          attributes: ["id", "first_name", "last_name", "email"],
+          foreignKey: "buyer_id",
+        },
+      ],
+      where: orderWhereClause,
+      order: [["order_date", "DESC"]],
+      limit: parseInt(limit),
+      offset: offset,
+      distinct: true,
+    });
+
+    // Process orders to include item summaries
+    const processedOrders = orders.map((order) => {
+      const items = order.items || [];
+
+      // Calculate totals and summaries
+      let totalItemsCount = 0;
+      let totalAmount = 0;
+      let totalRetipAmount = 0;
+      const itemNames = [];
+      const uniqueStatuses = new Set();
+      const uniquePaymentStatuses = new Set();
+
+      items.forEach((item) => {
+        totalItemsCount += item.quantity;
+        const itemTotal = parseFloat(item.price) * item.quantity;
+        const retipTotal = parseFloat(item.retip_price) || 0;
+
+        totalAmount += itemTotal;
+        totalRetipAmount += retipTotal;
+        itemNames.push(`${item.title} (x${item.quantity})`);
+        uniqueStatuses.add(item.order_status);
+        uniquePaymentStatuses.add(item.payment_status);
+      });
+
+      // Determine overall statuses
+      const statusArray = Array.from(uniqueStatuses);
+      const overallStatus = statusArray.length === 1 ? statusArray[0] : "mixed";
+
+      const paymentStatusArray = Array.from(uniquePaymentStatuses);
+      const overallPaymentStatus =
+        paymentStatusArray.length === 1 ? paymentStatusArray[0] : "mixed";
+
+      return {
+        // Order Information
+        orderId: order.id,
+        orderDate: order.order_date,
+        orderCreatedAt: order.created_at,
+        orderUpdatedAt: order.updated_at,
+
+        // Buyer Information
+        buyer: {
+          id: order.buyer?.id,
+          firstName: order.buyer?.first_name,
+          lastName: order.buyer?.last_name,
+          fullName: order.buyer
+            ? `${order.buyer.first_name} ${order.buyer.last_name}`
+            : null,
+          email: order.buyer?.email,
+        },
+
+        // Items Summary
+        itemsSummary: {
+          totalItemsCount: totalItemsCount,
+          totalUniqueItems: items.length,
+          itemNames: itemNames,
+          itemsPreview:
+            itemNames.length > 0
+              ? itemNames.slice(0, 3).join(", ") +
+                (itemNames.length > 3
+                  ? ` and ${itemNames.length - 3} more`
+                  : "")
+              : "No items",
+        },
+
+        // Financial Information
+        amounts: {
+          orderTotal: parseFloat(order.total_amount),
+          shippingCost: parseFloat(order.shipping_cost),
+          platformFee: parseFloat(order.platform_fee),
+          itemsTotal: Math.round(totalAmount * 100) / 100,
+          retipTotal: Math.round(totalRetipAmount * 100) / 100,
+          calculatedTotal:
+            Math.round((totalAmount + totalRetipAmount) * 100) / 100,
+        },
+
+        // Status Information
+        status: {
+          orderPaymentCompleted: order.payment_completed,
+          itemsOrderStatus: overallStatus,
+          itemsPaymentStatus: overallPaymentStatus,
+          statusDetails: statusArray,
+          paymentStatusDetails: paymentStatusArray,
+        },
+
+        // Shipping Information
+        shippingInfo: {
+          shippingAddress: order.shipping_address,
+          trackingNumber: order.tracking_number,
+          requiresRetipping: order.requires_retipping,
+          shipstationId: order.shipstation_id,
+        },
+      };
+    });
+
+    const totalPages = Math.ceil(count / parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orders: processedOrders,
+        totalOrders: count,
+        totalPages: totalPages,
+        currentPage: parseInt(page),
+        itemsPerPage: parseInt(limit),
+      },
+    });
+  } catch (error) {
+    console.error("Get admin orders error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching orders",
+      error: error.message,
+    });
+  }
+};
+
+// Endpoint 2: Get order items by order ID for admin
+exports.getOrderItemsByOrderId = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // First, get the order information
+    const order = await Order.findByPk(orderId, {
+      include: [
+        {
+          model: User,
+          as: "buyer",
+          attributes: ["id", "first_name", "last_name", "email"],
+        },
+      ],
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Get all order items for this order
+    const orderItems = await OrderItem.findAll({
+      where: { order_id: orderId },
+      include: [
+        {
+          model: Product,
+          as: "product",
+          attributes: [
+            "id",
+            "title",
+            "images",
+            "price",
+            "quantity",
+            "category",
+            "condition",
+            "requires_retipping",
+            "user_id",
+          ],
+          include: [
+            {
+              model: User,
+              as: "seller", // Assuming this association exists
+              attributes: ["id", "first_name", "last_name", "email"],
+            },
+          ],
+        },
+      ],
+      order: [["created_at", "ASC"]],
+    });
+
+    if (orderItems.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          orderInfo: {
+            orderId: order.id,
+            orderDate: order.order_date,
+            totalAmount: parseFloat(order.total_amount),
+            shippingCost: parseFloat(order.shipping_cost),
+            platformFee: parseFloat(order.platform_fee),
+            paymentCompleted: order.payment_completed,
+            shippingAddress: order.shipping_address,
+            trackingNumber: order.tracking_number,
+            requiresRetipping: order.requires_retipping,
+            shipstationId: order.shipstation_id,
+            buyer: order.buyer
+              ? {
+                  id: order.buyer.id,
+                  firstName: order.buyer.first_name,
+                  lastName: order.buyer.last_name,
+                  fullName: `${order.buyer.first_name} ${order.buyer.last_name}`,
+                  email: order.buyer.email,
+                }
+              : null,
+            createdAt: order.created_at,
+            updatedAt: order.updated_at,
+          },
+          orderItems: [],
+          summary: {
+            totalItems: 0,
+            totalQuantity: 0,
+            totalAmount: 0,
+            totalRetipAmount: 0,
+            grandTotal: 0,
+          },
+        },
+      });
+    }
+
+    // Process order items
+    const processedItems = orderItems.map((item) => {
+      const itemTotal = parseFloat(item.price) * item.quantity;
+      const retipTotal = parseFloat(item.retip_price) || 0;
+      const grandTotal = itemTotal + retipTotal;
+
+      return {
+        // Order Item Details
+        orderItemId: item.id,
+        productId: item.product_id,
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        itemTitle: item.title,
+        retipAdded: item.retip_added,
+        retipPrice: retipTotal,
+        orderStatus: item.order_status,
+        paymentStatus: item.payment_status,
+
+        // Calculated totals for this item
+        itemTotal: Math.round(itemTotal * 100) / 100,
+        retipTotal: Math.round(retipTotal * 100) / 100,
+        grandTotal: Math.round(grandTotal * 100) / 100,
+
+        // Product Details
+        product: {
+          id: item.product.id,
+          title: item.product.title,
+          image: item.product.images?.[0] || null,
+          images: item.product.images,
+          originalPrice: parseFloat(item.product.price),
+          category: item.product.category,
+          condition: item.product.condition,
+          requiresRetipping: item.product.requires_retipping,
+          stockRemaining: item.product.quantity,
+          seller: item.product.seller
+            ? {
+                id: item.product.seller.id,
+                firstName: item.product.seller.first_name,
+                lastName: item.product.seller.last_name,
+                fullName: `${item.product.seller.first_name} ${item.product.seller.last_name}`,
+                email: item.product.seller.email,
+              }
+            : null,
+        },
+
+        // Timestamps
+        itemCreatedAt: item.created_at,
+        itemUpdatedAt: item.updated_at,
+      };
+    });
+
+    // Order information
+    const orderInfo = {
+      orderId: order.id,
+      orderDate: order.order_date,
+      totalAmount: parseFloat(order.total_amount),
+      shippingCost: parseFloat(order.shipping_cost),
+      platformFee: parseFloat(order.platform_fee),
+      paymentCompleted: order.payment_completed,
+      shippingAddress: order.shipping_address,
+      trackingNumber: order.tracking_number,
+      requiresRetipping: order.requires_retipping,
+      shipstationId: order.shipstation_id,
+      buyer: order.buyer
+        ? {
+            id: order.buyer.id,
+            firstName: order.buyer.first_name,
+            lastName: order.buyer.last_name,
+            fullName: `${order.buyer.first_name} ${order.buyer.last_name}`,
+            email: order.buyer.email,
+          }
+        : null,
+      createdAt: order.created_at,
+      updatedAt: order.updated_at,
+    };
+
+    // Calculate summary totals
+    const summary = {
+      totalItems: processedItems.length,
+      totalQuantity: processedItems.reduce(
+        (sum, item) => sum + item.quantity,
+        0
+      ),
+      totalAmount:
+        Math.round(
+          processedItems.reduce((sum, item) => sum + item.itemTotal, 0) * 100
+        ) / 100,
+      totalRetipAmount:
+        Math.round(
+          processedItems.reduce((sum, item) => sum + item.retipTotal, 0) * 100
+        ) / 100,
+      grandTotal:
+        Math.round(
+          processedItems.reduce((sum, item) => sum + item.grandTotal, 0) * 100
+        ) / 100,
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orderInfo: orderInfo,
+        orderItems: processedItems,
+        summary: summary,
+      },
+    });
+  } catch (error) {
+    console.error("Get order items error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching order items",
+      error: error.message,
+    });
+  }
+};

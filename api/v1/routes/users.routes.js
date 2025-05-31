@@ -3,6 +3,9 @@ const multer = require("multer");
 const {
   getUserById,
   convertToSeller,
+  getAllUsers,
+  getUserInsights,
+  suspendUser,
 } = require("../controllers/user.controller");
 
 const router = express.Router();
@@ -18,6 +21,9 @@ const upload = multer({
 
 // Get user by ID
 router.get("/:userId", getUserById);
+router.get("/", getAllUsers);
+router.get("/user-insights/:userId", getUserInsights);
+router.patch("/:userId/suspend", suspendUser);
 
 // Convert buyer to seller
 router.put(

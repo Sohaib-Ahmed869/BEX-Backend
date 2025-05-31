@@ -198,6 +198,14 @@ const login = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Check if user is suspended
+    if (user.is_suspended) {
+      return res.status(403).json({
+        message:
+          "Your account has been suspended. Please contact support for assistance.",
+      });
+    }
+
     // Validate password
     const isValid = await user.validatePassword(password);
     if (!isValid) {
