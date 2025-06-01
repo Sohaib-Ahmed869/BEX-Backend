@@ -76,6 +76,10 @@ const Product = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    is_flagged: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     requires_retipping: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

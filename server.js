@@ -19,6 +19,7 @@ const AdminDashboardRoutes = require("./api/v1/routes/AdminDashboardStats.routes
 const ProductListingRoutes = require("./api/v1/routes/ProductListings.routes");
 const OrdersRoutes = require("./api/v1/routes/orders.routes");
 const UserRoutes = require("./api/v1/routes/users.routes");
+const ProductFlaggingRoutes = require("./api/v1/routes/flagProducts.routes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 // Middleware
@@ -56,6 +57,8 @@ app.use("/api/sellerdashboard", SellerDashboardRoutes);
 app.use("/api/orders", OrdersRoutes);
 app.use("/api/user", UserRoutes);
 app.use("/api/admin/dashboard", AdminDashboardRoutes);
+app.use("/api/admin/flagproduct", ProductFlaggingRoutes);
+
 app.use(passport.initialize());
 
 // Add Google auth routes
