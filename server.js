@@ -20,6 +20,7 @@ const ProductListingRoutes = require("./api/v1/routes/ProductListings.routes");
 const OrdersRoutes = require("./api/v1/routes/orders.routes");
 const UserRoutes = require("./api/v1/routes/users.routes");
 const ProductFlaggingRoutes = require("./api/v1/routes/flagProducts.routes");
+const CategoryCommissionRoutes = require("./api/v1/routes/commission.routes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 // Middleware
@@ -58,6 +59,7 @@ app.use("/api/orders", OrdersRoutes);
 app.use("/api/user", UserRoutes);
 app.use("/api/admin/dashboard", AdminDashboardRoutes);
 app.use("/api/admin/flagproduct", ProductFlaggingRoutes);
+app.use("/api/admin/commission", CategoryCommissionRoutes);
 
 app.use(passport.initialize());
 

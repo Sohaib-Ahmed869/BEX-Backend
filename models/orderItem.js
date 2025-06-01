@@ -42,6 +42,10 @@ const OrderItem = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    platform_commission: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.0,
+    },
     retip_price: {
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0.0,

@@ -13,7 +13,6 @@ const {
   getAllProducts,
 } = require("../controllers/products.controller");
 
-// Configure multer for memory storage (needed for S3 uploading)
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -22,14 +21,20 @@ const upload = multer({
   },
 });
 
-router.post("/add/:userId", upload.array("files", 10), addProduct);
-
-// Get all products for a user
-router.get("/:userId", getUserProducts);
-router.get("/getproductbyId/:productId", getProductById);
-router.delete("/:productId", deleteProduct);
 router.get("/", getAllProducts);
 router.get("/getAllProducts", getProducts);
+router.get("/getproductbyId/:productId", getProductById);
+
+// POST routes
+router.post("/add/:userId", upload.array("files", 10), addProduct);
+
+// PUT routes
 router.put("/update/:productId", upload.array("files", 10), updateProduct);
+
+// DELETE routes
+router.delete("/:productId", deleteProduct);
+
+// DYNAMIC PARAMETER ROUTES LAST
+router.get("/:userId", getUserProducts);
 
 module.exports = router;
