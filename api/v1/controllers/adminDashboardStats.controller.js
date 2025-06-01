@@ -469,7 +469,7 @@ exports.getPaymentAnalytics = async (req, res) => {
  */
 exports.getCompanyPerformance = async (req, res) => {
   try {
-    const { startDate, endDate, limit = 20 } = req.query;
+    const { startDate, endDate, limit = 10 } = req.query;
 
     const now = new Date();
     const defaultStartDate = startDate

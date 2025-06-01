@@ -178,6 +178,198 @@ exports.getSellerOrders = async (req, res) => {
     });
   }
 };
+exports.getBuyerOrders = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { orderStatus, paymentStatus, startDate, endDate } = req.query;
+
+    // Build where clause for filtering orders
+    let orderWhereClause = { buyer_id: userId };
+
+    // Date filtering
+    if (startDate && endDate) {
+      orderWhereClause.order_date = {
+        [Op.between]: [new Date(startDate), new Date(endDate)],
+      };
+    } else if (startDate) {
+      orderWhereClause.order_date = {
+        [Op.gte]: new Date(startDate),
+      };
+    } else if (endDate) {
+      orderWhereClause.order_date = {
+        [Op.lte]: new Date(endDate),
+      };
+    }
+
+    // Payment status filtering
+    if (paymentStatus !== undefined) {
+      orderWhereClause.payment_completed = paymentStatus === "true";
+    }
+
+    // Build where clause for order items if needed
+    let orderItemWhereClause = {};
+
+    // Order status filtering (now on OrderItem model)
+    if (orderStatus) {
+      orderItemWhereClause.order_status = orderStatus;
+    }
+
+    // Get buyer's orders with all related data
+    const buyerOrders = await Order.findAll({
+      where: orderWhereClause,
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          where:
+            Object.keys(orderItemWhereClause).length > 0
+              ? orderItemWhereClause
+              : undefined,
+          required: true,
+          include: [
+            {
+              model: Product,
+              as: "product",
+              attributes: ["id", "condition", "category", "images"],
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "buyer",
+          attributes: ["id", "first_name", "last_name", "email"],
+        },
+      ],
+      order: [["order_date", "DESC"]],
+      distinct: true,
+    });
+
+    // Structure the response with individual order structure
+    const structuredOrders = buyerOrders.map((order) => {
+      // Calculate order totals
+      const itemsSubtotal = order.items.reduce((sum, item) => {
+        return sum + parseFloat(item.price) * item.quantity;
+      }, 0);
+
+      const retippingTotal = order.items.reduce((sum, item) => {
+        return sum + (parseFloat(item.retip_price) || 0);
+      }, 0);
+
+      const orderTotal =
+        itemsSubtotal +
+        retippingTotal +
+        parseFloat(order.shipping_cost) +
+        parseFloat(order.platform_fee);
+
+      return {
+        // Order Details
+        orderId: order.id,
+        orderDate: order.order_date,
+        totalAmount: parseFloat(order.total_amount),
+        shippingCost: parseFloat(order.shipping_cost),
+        platformFee: parseFloat(order.platform_fee),
+        paymentCompleted: order.payment_completed,
+        shippingAddress: order.shipping_address,
+        trackingNumber: order.tracking_number,
+        requiresRetipping: order.requires_retipping,
+        shipstationId: order.shipstation_id,
+
+        // Calculated Totals
+        itemsSubtotal: Math.round(itemsSubtotal * 100) / 100,
+        retippingTotal: Math.round(retippingTotal * 100) / 100,
+        grandTotal: Math.round(orderTotal * 100) / 100,
+
+        // Buyer Details
+        buyer: {
+          id: order.buyer?.id,
+          firstName: order.buyer?.first_name,
+          lastName: order.buyer?.last_name,
+          fullName: order.buyer
+            ? `${order.buyer.first_name} ${order.buyer.last_name}`
+            : null,
+          email: order.buyer?.email,
+        },
+
+        // Order Items
+        items: order.items.map((item) => {
+          const itemLineTotal = parseFloat(item.price) * item.quantity;
+          const retipCost = parseFloat(item.retip_price) || 0;
+          const itemGrandTotal = itemLineTotal + retipCost;
+
+          return {
+            // Order Item Details
+            orderItemId: item.id,
+            productId: item.product_id,
+            title: item.title,
+            quantity: item.quantity,
+            unitPrice: parseFloat(item.price),
+            lineTotal: Math.round(itemLineTotal * 100) / 100,
+            retipAdded: item.retip_added,
+            retipPrice: retipCost,
+            orderStatus: item.order_status,
+            paymentStatus: item.payment_status,
+
+            // Product Details
+            product: item.product
+              ? {
+                  id: item.product.id,
+                  title: item.product.title,
+                  description: item.product.description,
+                  originalPrice: parseFloat(item.product.price),
+                  condition: item.product.condition,
+                  category: item.product.category,
+                  subtype: item.product.subtype,
+                  images: item.product.images || [],
+                  requiresRetipping: item.product.requires_retipping,
+                  isActive: item.product.is_active,
+                }
+              : null,
+
+            // Calculated totals for this item
+            itemTotal: Math.round(itemLineTotal * 100) / 100,
+            retipTotal: Math.round(retipCost * 100) / 100,
+            itemGrandTotal: Math.round(itemGrandTotal * 100) / 100,
+
+            // Timestamps
+            itemCreatedAt: item.created_at,
+            itemUpdatedAt: item.updated_at,
+          };
+        }),
+
+        // Timestamps
+        orderCreatedAt: order.created_at,
+        orderUpdatedAt: order.updated_at,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orders: structuredOrders,
+        totalOrders: structuredOrders.length,
+        summary: {
+          totalOrderValue: structuredOrders.reduce(
+            (sum, order) => sum + order.grandTotal,
+            0
+          ),
+          completedPayments: structuredOrders.filter(
+            (order) => order.paymentCompleted
+          ).length,
+          pendingPayments: structuredOrders.filter(
+            (order) => !order.paymentCompleted
+          ).length,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get buyer orders error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching buyer orders",
+      error: error.message,
+    });
+  }
+};
 exports.getSingleOrderItem = async (req, res) => {
   try {
     const { itemId } = req.params;

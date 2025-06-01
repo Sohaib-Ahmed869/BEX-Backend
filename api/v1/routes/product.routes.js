@@ -8,6 +8,7 @@ const {
   updateProduct,
   deleteProduct,
   getFeaturedProducts,
+  getProducts,
   searchProducts,
   getAllProducts,
 } = require("../controllers/products.controller");
@@ -28,6 +29,7 @@ router.get("/:userId", getUserProducts);
 router.get("/getproductbyId/:productId", getProductById);
 router.delete("/:productId", deleteProduct);
 router.get("/", getAllProducts);
+router.get("/getAllProducts", getProducts);
 router.put("/update/:productId", upload.array("files", 10), updateProduct);
 
 module.exports = router;

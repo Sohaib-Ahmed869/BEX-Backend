@@ -67,9 +67,6 @@ const User = sequelize.define(
     website_url: {
       type: DataTypes.STRING,
       allowNull: true,
-      validate: {
-        isUrl: true,
-      },
     },
     license_image_path: {
       type: DataTypes.STRING,

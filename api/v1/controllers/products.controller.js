@@ -1,7 +1,4 @@
-const {
-  Product,
-  ProductRetippingDetails,
-} = require("../../../models/product.modal");
+const { Product, ProductRetippingDetails } = require("../../../models");
 const { ProductListing } = require("../../../models/ProductListing.model");
 const { sequelize } = require("../../../config/db");
 const AWS = require("aws-sdk");
@@ -168,7 +165,70 @@ exports.addProduct = async (req, res) => {
     });
   }
 };
+exports.getProducts = async (req, res) => {
+  try {
+    // First, check if the association exists
+    const isAssociationDefined =
+      Product.associations && Product.associations.retippingDetails;
 
+    let products;
+
+    // Base where condition to exclude archived products
+    const whereCondition = {
+      is_Archived: false,
+      is_flagged: false,
+      list_for_selling: true,
+    };
+
+    if (isAssociationDefined) {
+      // If association exists, include the retipping details
+      products = await Product.findAll({
+        where: whereCondition,
+        include: [
+          {
+            model: ProductRetippingDetails,
+            as: "retipping_details",
+            attributes: [
+              "diameter",
+              "enable_diy",
+              "per_segment_price",
+              "segments",
+              "total_price",
+            ],
+            required: false, // LEFT JOIN - include products even without retipping details
+          },
+        ],
+        order: [["created_at", "DESC"]],
+      });
+    } else {
+      // If association doesn't exist, fetch products without including retipping details
+      products = await Product.findAll({
+        where: whereCondition,
+        order: [["created_at", "DESC"]],
+      });
+    }
+
+    // Log the unique user_ids for debugging
+    const uniqueUserIds = [
+      ...new Set(products.map((product) => product.user_id)),
+    ];
+    console.log(
+      `Found ${products.length} non-archived products from ${uniqueUserIds.length} unique sellers`
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: products,
+      totalCount: products.length,
+    });
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 exports.getAllProducts = async (req, res) => {
   try {
     // Extract pagination parameters from query string
@@ -200,7 +260,11 @@ exports.getAllProducts = async (req, res) => {
 
     // Base where condition to exclude archived products
     const whereCondition = {
-      is_Archived: false, // Only fetch non-archived products
+      is_Archived: false,
+      is_flagged: false,
+      list_for_selling: true,
+
+      // Only fetch non-archived products
     };
 
     if (isAssociationDefined) {
@@ -283,7 +347,7 @@ exports.getUserProducts = async (req, res) => {
 
     // Find all products associated with the user ID
     const products = await Product.findAll({
-      where: { user_id: userId, is_Archived: false },
+      where: { user_id: userId, is_Archived: false, is_flagged: false },
       order: [["created_at", "DESC"]],
     });
 
