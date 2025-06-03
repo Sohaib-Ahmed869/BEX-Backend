@@ -15,6 +15,9 @@ const { Product, ProductRetippingDetails } = require("./product.modal");
 const { CartItem, Cart } = require("./cart.model");
 const { Wishlist, WishlistItem } = require("./wishlist.model");
 const { ProductListing } = require("./ProductListing.model");
+const OrderDispute = require("./orderdisputes.model");
+const { Chat } = require("./chat.model");
+const { Message } = require("./message.model");
 
 // Order - OrderItem associations
 Order.hasMany(OrderItem, {
@@ -157,6 +160,65 @@ ProductListing.belongsTo(User, {
   as: "user",
 });
 
+// Order Disputes
+User.hasMany(OrderDispute, {
+  foreignKey: "user_id",
+  as: "disputes",
+});
+
+OrderDispute.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user",
+});
+
+// Order - OrderDispute (One order can have many disputes through order items)
+Order.hasMany(OrderDispute, {
+  foreignKey: "order_id",
+  as: "disputes",
+});
+
+OrderDispute.belongsTo(Order, {
+  foreignKey: "order_id",
+  as: "order",
+});
+
+// OrderItem - OrderDispute (One order item can have only one dispute)
+OrderItem.hasOne(OrderDispute, {
+  foreignKey: "order_item_id",
+  as: "dispute",
+});
+
+OrderDispute.belongsTo(OrderItem, {
+  foreignKey: "order_item_id",
+  as: "orderItem",
+});
+
+// Product - OrderDispute (One product can have many disputes)
+Product.hasMany(OrderDispute, {
+  foreignKey: "product_id",
+  as: "disputes",
+});
+
+OrderDispute.belongsTo(Product, {
+  foreignKey: "product_id",
+  as: "product",
+});
+
+// Messaging
+
+Chat.hasMany(Message, { foreignKey: "chat_id", as: "messages" });
+Message.belongsTo(Chat, { foreignKey: "chat_id", as: "chat" });
+
+// User associations
+Chat.belongsTo(User, { foreignKey: "buyer_id", as: "buyer" });
+Chat.belongsTo(User, { foreignKey: "seller_id", as: "seller" });
+Chat.belongsTo(Product, {
+  foreignKey: "product_id",
+  as: "product",
+});
+
+Message.belongsTo(User, { foreignKey: "sender_id", as: "sender" });
+
 module.exports = {
   User,
   Company,
@@ -176,4 +238,8 @@ module.exports = {
   ProductRetippingDetails,
   Wishlist,
   WishlistItem,
+  ProductListing,
+  OrderDispute,
+  Chat,
+  Message,
 };

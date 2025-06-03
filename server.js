@@ -21,7 +21,21 @@ const OrdersRoutes = require("./api/v1/routes/orders.routes");
 const UserRoutes = require("./api/v1/routes/users.routes");
 const ProductFlaggingRoutes = require("./api/v1/routes/flagProducts.routes");
 const CategoryCommissionRoutes = require("./api/v1/routes/commission.routes");
+const OrderDisputeRoutes = require("./api/v1/routes/orderDisputes.routes");
+const { setupChatSocket } = require("./api/v1/socket/chatSocket");
+const ChatRoutes = require("./api/v1/routes/chat.routes");
+const http = require("http");
+const socketIo = require("socket.io");
+
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
 const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(
@@ -30,6 +44,8 @@ app.use(
     credentials: true,
   })
 );
+setupChatSocket(io);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -57,112 +73,21 @@ app.use("/api/checkout", checkoutRoutes);
 app.use("/api/sellerdashboard", SellerDashboardRoutes);
 app.use("/api/orders", OrdersRoutes);
 app.use("/api/user", UserRoutes);
+app.use("/api/orderdispute", OrderDisputeRoutes);
 app.use("/api/admin/dashboard", AdminDashboardRoutes);
 app.use("/api/admin/flagproduct", ProductFlaggingRoutes);
 app.use("/api/admin/commission", CategoryCommissionRoutes);
+app.use("/api/chat", ChatRoutes);
 
 app.use(passport.initialize());
 
 // Add Google auth routes
 app.use("/api/googleauth", googleAuthRoutes);
-// // Initialize Passport
-// app.use(passport.initialize());
-// app.use(passport.session());
-
-// // Passport configuration
-// passport.serializeUser((user, done) => {
-//   done(null, user.id);
-// });
-
-// passport.deserializeUser(async (id, done) => {
-//   try {
-//     const user = await User.findByPk(id);
-//     done(null, user);
-//   } catch (error) {
-//     done(error, null);
-//   }
-// });
-
-// // Google OAuth Strategy
-// if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-//   passport.use(
-//     new GoogleStrategy(
-//       {
-//         clientID: process.env.GOOGLE_CLIENT_ID,
-//         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-//         callbackURL: `${
-//           process.env.API_URL || "http://localhost:5000"
-//         }/api/auth/google/callback`,
-//         userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
-//       },
-//       async (accessToken, refreshToken, profile, done) => {
-//         try {
-//           // Check if user already exists
-//           const existingUser = await User.findOne({
-//             where: { email: profile.emails[0].value },
-//           });
-
-//           if (existingUser) {
-//             return done(null, existingUser);
-//           }
-
-//           // Create new user if doesn't exist
-//           const newUser = await User.create({
-//             email: profile.emails[0].value,
-//             password_hash: Math.random().toString(36).substring(2), // Random password
-//             first_name:
-//               profile.name.givenName || profile.displayName.split(" ")[0],
-//             last_name:
-//               profile.name.familyName ||
-//               profile.displayName.split(" ").slice(1).join(" "),
-//             email_verified: true,
-//           });
-
-//           return done(null, newUser);
-//         } catch (error) {
-//           return done(error, null);
-//         }
-//       }
-//     )
-//   );
-// } else {
-//   console.log(
-//     "Google OAuth credentials not provided. Google login will not be available."
-//   );
-// }
 
 // Basic route
 app.get("/", (req, res) => {
   res.send("BEX API is running");
 });
-
-// Google OAuth routes
-// app.get(
-//   "/api/auth/google",
-//   passport.authenticate("google", {
-//     scope: ["profile", "email"],
-//   })
-// );
-
-// app.get(
-//   "/api/auth/google/callback",
-//   passport.authenticate("google", { failureRedirect: "/login" }),
-//   (req, res) => {
-//     // Generate JWT token for frontend
-//     const token = jwt.sign(
-//       { id: req.user.id, email: req.user.email, role: req.user.role },
-//       process.env.JWT_SECRET || "bex-jwt-secret-change-this",
-//       { expiresIn: "24h" }
-//     );
-
-//     // Redirect to frontend with token
-//     res.redirect(
-//       `${
-//         process.env.CLIENT_URL || "http://localhost:5173"
-//       }/auth/success?token=${token}`
-//     );
-//   }
-// );
 
 // Sync database and start server
 async function startServer() {
