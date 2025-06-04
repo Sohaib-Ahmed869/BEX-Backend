@@ -73,7 +73,12 @@ exports.addProduct = async (req, res) => {
       !productData.title ||
       !productData.price ||
       !productData.condition ||
-      !productData.category
+      !productData.category ||
+      !productData.quantity ||
+      !productData.weight ||
+      !productData.height ||
+      !productData.width ||
+      !productData.length
     ) {
       throw new Error("Missing required product information");
     }
@@ -104,6 +109,10 @@ exports.addProduct = async (req, res) => {
         description: productData.description || "",
         price: parseFloat(productData.price),
         quantity: quantity,
+        weight: parseFloat(productData.weight),
+        height: parseFloat(productData.height),
+        width: parseFloat(productData.width),
+        length: parseFloat(productData.length),
         condition: productData.condition,
         subtype: productData.subtype || null,
         location: productData.location || null,
@@ -551,6 +560,10 @@ exports.updateProduct = async (req, res) => {
           ? parseInt(productData.quantity, 10)
           : product.quantity,
       condition: productData.condition || product.condition,
+      weight: productData.weight || product.weight,
+      height: productData.height || product.height,
+      length: productData.length || product.length,
+      width: productData.width || product.width,
       subtype:
         productData.subtype !== undefined
           ? productData.subtype

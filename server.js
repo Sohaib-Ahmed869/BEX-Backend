@@ -22,6 +22,8 @@ const UserRoutes = require("./api/v1/routes/users.routes");
 const ProductFlaggingRoutes = require("./api/v1/routes/flagProducts.routes");
 const CategoryCommissionRoutes = require("./api/v1/routes/commission.routes");
 const OrderDisputeRoutes = require("./api/v1/routes/orderDisputes.routes");
+const shipstationRoutes = require("./api/v1/routes/shipment.routes");
+
 const { setupChatSocket } = require("./api/v1/socket/chatSocket");
 const ChatRoutes = require("./api/v1/routes/chat.routes");
 const http = require("http");
@@ -37,13 +39,16 @@ const io = socketIo(server, {
   },
 });
 const PORT = process.env.PORT || 5000;
+
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: process.env.CLIENT_URL || "http://localhost:3173",
     credentials: true,
   })
 );
+
+// Setup Socket.IO
 setupChatSocket(io);
 
 app.use(express.json());
@@ -78,6 +83,12 @@ app.use("/api/admin/dashboard", AdminDashboardRoutes);
 app.use("/api/admin/flagproduct", ProductFlaggingRoutes);
 app.use("/api/admin/commission", CategoryCommissionRoutes);
 app.use("/api/chat", ChatRoutes);
+app.use("/api/shipstation", shipstationRoutes);
+app.use(
+  "/api/webhooks/shipstation",
+  express.raw({ type: "application/json" }),
+  shipstationRoutes
+);
 
 app.use(passport.initialize());
 
@@ -100,9 +111,10 @@ async function startServer() {
     await sequelize.sync({ alter: true });
     console.log("Database synchronized");
 
-    // Start Express server
-    app.listen(PORT, () => {
+    // IMPORTANT: Use server.listen() instead of app.listen()
+    server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`Socket.IO server is ready`);
     });
   } catch (error) {
     console.error("Unable to start server:", error);

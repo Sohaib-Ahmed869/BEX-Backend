@@ -194,6 +194,8 @@ router.post(
         countryOfRegistration,
         businessAddress,
         websiteUrl,
+        city,
+        postalCode,
       } = req.body;
       const tempUserData = req.user.tempUser;
 
@@ -231,6 +233,9 @@ router.post(
         country_of_registration: countryOfRegistration || null,
         business_address: businessAddress || null,
         website_url: websiteUrl || null,
+        city: city || null,
+        postal_code: postalCode || null,
+        // Buyer specific fields
         license_image_path: licenseImageUrl, // Store S3 URL
         seller_approval_status: role === "seller" ? "pending" : null,
         email_verified: true, // Google users are pre-verified

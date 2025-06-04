@@ -100,6 +100,8 @@ const RegisterSeller = async (req, res) => {
       countryOfRegistration,
       businessAddress,
       websiteUrl,
+      city,
+      postalCode,
     } = req.body;
 
     // Debug log to check what we're receiving
@@ -153,6 +155,8 @@ const RegisterSeller = async (req, res) => {
       website_url: websiteUrl,
       license_image_path: licenseImageUrl, // Store S3 URL instead of local path
       seller_approval_status: "pending",
+      city,
+      postal_code: postalCode,
     });
 
     // Generate JWT token

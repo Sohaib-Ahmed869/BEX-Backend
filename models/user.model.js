@@ -18,6 +18,15 @@ const User = sequelize.define(
         isEmail: true,
       },
     },
+    postal_code: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    city: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
     password_hash: {
       type: DataTypes.STRING,
       allowNull: false,

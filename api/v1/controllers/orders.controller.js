@@ -2,12 +2,195 @@ const { Order, OrderItem, Product, User } = require("../../../models");
 const { Op } = require("sequelize");
 const { sequelize } = require("../../../config/db");
 const { ProductListing } = require("../../../models/ProductListing.model");
+// exports.getSellerOrders = async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+//     const { status, paymentStatus, startDate, endDate } = req.query;
+
+//     // Get seller's products
+//     const sellerProducts = await Product.findAll({
+//       where: { user_id: userId },
+//       attributes: ["id"],
+//     });
+
+//     const productIds = sellerProducts.map((p) => p.id);
+
+//     if (productIds.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         data: {
+//           orders: [],
+//           totalOrders: 0,
+//         },
+//       });
+//     }
+
+//     // Build where clause for filtering
+//     let orderWhereClause = {};
+//     let orderItemWhereClause = { product_id: { [Op.in]: productIds } };
+
+//     // Date filtering
+//     if (startDate && endDate) {
+//       orderWhereClause.order_date = {
+//         [Op.between]: [new Date(startDate), new Date(endDate)],
+//       };
+//     } else if (startDate) {
+//       orderWhereClause.order_date = {
+//         [Op.gte]: new Date(startDate),
+//       };
+//     } else if (endDate) {
+//       orderWhereClause.order_date = {
+//         [Op.lte]: new Date(endDate),
+//       };
+//     }
+
+//     // Status filtering
+//     if (status) {
+//       orderItemWhereClause.order_status = status;
+//     }
+
+//     // Payment status filtering
+//     if (paymentStatus !== undefined) {
+//       orderItemWhereClause.payment_status = paymentStatus === "true";
+//     }
+
+//     // Get orders containing seller's products within filters
+//     const ordersWithItems = await Order.findAll({
+//       include: [
+//         {
+//           model: OrderItem,
+//           as: "items",
+//           where: orderItemWhereClause,
+//           include: [
+//             {
+//               model: Product,
+//               as: "product",
+//               attributes: [
+//                 "id",
+//                 "title",
+//                 "images",
+//                 "price",
+//                 "quantity",
+//                 "category",
+//                 "condition",
+//                 "requires_retipping",
+//               ],
+//             },
+//           ],
+//         },
+//         {
+//           model: User,
+//           as: "buyer",
+//           attributes: ["id", "first_name", "last_name", "email"],
+//           foreignKey: "buyer_id",
+//         },
+//       ],
+//       where: orderWhereClause,
+//       order: [["order_date", "DESC"]],
+//       distinct: true,
+//     });
+
+//     // Flatten order items into individual entries
+//     const individualOrderItems = [];
+
+//     ordersWithItems.forEach((order) => {
+//       // Filter only seller's products from the order items
+//       const sellerItems = order.items.filter((item) =>
+//         productIds.includes(item.product_id)
+//       );
+
+//       sellerItems.forEach((item) => {
+//         const itemTotal = parseFloat(item.price) * item.quantity;
+//         const retipTotal = parseFloat(item.retip_price) || 0;
+//         const grandTotal = itemTotal + retipTotal;
+
+//         individualOrderItems.push({
+//           // Order Item Details
+//           orderItemId: item.id,
+//           productId: item.product_id,
+//           quantity: item.quantity,
+//           price: parseFloat(item.price),
+//           itemTitle: item.title,
+//           retipAdded: item.retip_added,
+//           retipPrice: retipTotal,
+//           orderStatus: item.order_status,
+//           paymentStatus: item.payment_status,
+
+//           // Calculated totals for this item
+//           itemTotal: Math.round(itemTotal * 100) / 100,
+//           retipTotal: Math.round(retipTotal * 100) / 100,
+//           grandTotal: Math.round(grandTotal * 100) / 100,
+
+//           // Order Details
+//           orderId: order.id,
+//           orderDate: order.order_date,
+//           shippingAddress: order.shipping_address,
+//           trackingNumber: order.tracking_number,
+//           paymentCompleted: order.payment_completed,
+//           requiresRetipping: order.requires_retipping,
+//           shipstationId: order.shipstation_id,
+
+//           // Buyer Details
+//           buyer: {
+//             id: order.buyer?.id,
+//             firstName: order.buyer?.first_name,
+//             lastName: order.buyer?.last_name,
+//             fullName: order.buyer
+//               ? `${order.buyer.first_name} ${order.buyer.last_name}`
+//               : null,
+//             email: order.buyer?.email,
+//           },
+
+//           // Product Details
+//           product: {
+//             id: item.product.id,
+//             title: item.product.title,
+//             image: item.product.images?.[0] || null,
+//             originalPrice: parseFloat(item.product.price),
+//             category: item.product.category,
+//             condition: item.product.condition,
+//             requiresRetipping: item.product.requires_retipping,
+//             stockRemaining: item.product.quantity,
+//           },
+
+//           // Timestamps
+//           orderCreatedAt: order.created_at,
+//           orderUpdatedAt: order.updated_at,
+//           itemCreatedAt: item.created_at,
+//           itemUpdatedAt: item.updated_at,
+//         });
+//       });
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       data: {
+//         orders: individualOrderItems,
+//         totalOrders: individualOrderItems.length,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Get seller orders error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Error fetching seller orders",
+//       error: error.message,
+//     });
+//   }
+// };
 exports.getSellerOrders = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { status, paymentStatus, startDate, endDate } = req.query;
+    const {
+      status,
+      paymentStatus,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 10,
+    } = req.query;
 
-    // Get seller's products
+    // Get seller's products first
     const sellerProducts = await Product.findAll({
       where: { user_id: userId },
       attributes: ["id"],
@@ -21,13 +204,15 @@ exports.getSellerOrders = async (req, res) => {
         data: {
           orders: [],
           totalOrders: 0,
+          totalPages: 0,
+          currentPage: parseInt(page),
+          itemsPerPage: parseInt(limit),
         },
       });
     }
 
-    // Build where clause for filtering
+    // Build where clause for filtering orders
     let orderWhereClause = {};
-    let orderItemWhereClause = { product_id: { [Op.in]: productIds } };
 
     // Date filtering
     if (startDate && endDate) {
@@ -44,40 +229,52 @@ exports.getSellerOrders = async (req, res) => {
       };
     }
 
-    // Status filtering
+    // Build where clause for filtering order items (seller's products + status/payment filters)
+    let orderItemWhereClause = {
+      product_id: { [Op.in]: productIds }, // Only seller's products
+    };
+    let includeItemFilters = true; // Always true since we're filtering by seller's products
+
+    // Status filtering (applies to order items)
     if (status) {
       orderItemWhereClause.order_status = status;
     }
 
-    // Payment status filtering
+    // Payment status filtering (applies to order items)
     if (paymentStatus !== undefined) {
       orderItemWhereClause.payment_status = paymentStatus === "true";
     }
 
-    // Get orders containing seller's products within filters
-    const ordersWithItems = await Order.findAll({
+    // Calculate offset for pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build include array for OrderItems (always include filters for seller)
+    const orderItemsInclude = {
+      model: OrderItem,
+      as: "items",
+      where: orderItemWhereClause,
       include: [
         {
-          model: OrderItem,
-          as: "items",
-          where: orderItemWhereClause,
-          include: [
-            {
-              model: Product,
-              as: "product",
-              attributes: [
-                "id",
-                "title",
-                "images",
-                "price",
-                "quantity",
-                "category",
-                "condition",
-                "requires_retipping",
-              ],
-            },
+          model: Product,
+          as: "product",
+          attributes: [
+            "id",
+            "title",
+            "images",
+            "price",
+            "category",
+            "condition",
+            "requires_retipping",
+            "quantity",
           ],
         },
+      ],
+    };
+
+    // Get orders that contain seller's products
+    const { count, rows: orders } = await Order.findAndCountAll({
+      include: [
+        orderItemsInclude,
         {
           model: User,
           as: "buyer",
@@ -87,86 +284,150 @@ exports.getSellerOrders = async (req, res) => {
       ],
       where: orderWhereClause,
       order: [["order_date", "DESC"]],
+      limit: parseInt(limit),
+      offset: offset,
       distinct: true,
     });
 
-    // Flatten order items into individual entries
-    const individualOrderItems = [];
-
-    ordersWithItems.forEach((order) => {
-      // Filter only seller's products from the order items
-      const sellerItems = order.items.filter((item) =>
+    // Process orders to include item summaries (only seller's items)
+    const processedOrders = orders.map((order) => {
+      // Filter only seller's items from the order
+      const sellerItems = (order.items || []).filter((item) =>
         productIds.includes(item.product_id)
       );
 
+      // Calculate totals and summaries for seller's items only
+      let totalItemsCount = 0;
+      let totalAmount = 0;
+      let totalRetipAmount = 0;
+      const itemNames = [];
+      const uniqueStatuses = new Set();
+      const uniquePaymentStatuses = new Set();
+
       sellerItems.forEach((item) => {
+        totalItemsCount += item.quantity;
         const itemTotal = parseFloat(item.price) * item.quantity;
         const retipTotal = parseFloat(item.retip_price) || 0;
-        const grandTotal = itemTotal + retipTotal;
 
-        individualOrderItems.push({
-          // Order Item Details
-          orderItemId: item.id,
-          productId: item.product_id,
-          quantity: item.quantity,
-          price: parseFloat(item.price),
-          itemTitle: item.title,
-          retipAdded: item.retip_added,
-          retipPrice: retipTotal,
-          orderStatus: item.order_status,
-          paymentStatus: item.payment_status,
+        totalAmount += itemTotal;
+        totalRetipAmount += retipTotal;
+        itemNames.push(`${item.title} (x${item.quantity})`);
+        uniqueStatuses.add(item.order_status);
+        uniquePaymentStatuses.add(item.payment_status);
+      });
 
-          // Calculated totals for this item
-          itemTotal: Math.round(itemTotal * 100) / 100,
-          retipTotal: Math.round(retipTotal * 100) / 100,
-          grandTotal: Math.round(grandTotal * 100) / 100,
+      // Determine overall statuses for seller's items
+      const statusArray = Array.from(uniqueStatuses);
+      const overallStatus = statusArray.length === 1 ? statusArray[0] : "mixed";
 
-          // Order Details
-          orderId: order.id,
-          orderDate: order.order_date,
+      const paymentStatusArray = Array.from(uniquePaymentStatuses);
+      const overallPaymentStatus =
+        paymentStatusArray.length === 1 ? paymentStatusArray[0] : "mixed";
+
+      // Calculate seller's portion of shipping and fees (proportional)
+      const orderTotal = parseFloat(order.total_amount);
+      const sellerItemsTotal = totalAmount + totalRetipAmount;
+      const sellerProportion =
+        orderTotal > 0 ? sellerItemsTotal / orderTotal : 0;
+
+      const proportionalShipping =
+        Math.round(parseFloat(order.shipping_cost) * sellerProportion * 100) /
+        100;
+      const proportionalPlatformFee =
+        Math.round(parseFloat(order.platform_fee) * sellerProportion * 100) /
+        100;
+
+      return {
+        // Order Information
+        orderId: order.id,
+        orderDate: order.order_date,
+        orderCreatedAt: order.created_at,
+        orderUpdatedAt: order.updated_at,
+
+        // Buyer Information
+        buyer: {
+          id: order.buyer?.id,
+          firstName: order.buyer?.first_name,
+          lastName: order.buyer?.last_name,
+          fullName: order.buyer
+            ? `${order.buyer.first_name} ${order.buyer.last_name}`
+            : null,
+          email: order.buyer?.email,
+        },
+
+        // Items Summary (seller's items only)
+        itemsSummary: {
+          totalItemsCount: totalItemsCount,
+          totalUniqueItems: sellerItems.length,
+          itemNames: itemNames,
+          itemsPreview:
+            itemNames.length > 0
+              ? itemNames.slice(0, 3).join(", ") +
+                (itemNames.length > 3
+                  ? ` and ${itemNames.length - 3} more`
+                  : "")
+              : "No seller items",
+        },
+
+        // Financial Information (seller's portion)
+        amounts: {
+          orderTotal: parseFloat(order.total_amount), // Full order total for reference
+          sellerItemsTotal: Math.round(sellerItemsTotal * 100) / 100, // Seller's items total
+          itemsTotal: Math.round(totalAmount * 100) / 100, // Base price total
+          retipTotal: Math.round(totalRetipAmount * 100) / 100, // Retip total
+          proportionalShipping: proportionalShipping, // Seller's portion of shipping
+          proportionalPlatformFee: proportionalPlatformFee, // Seller's portion of platform fee
+          sellerRevenue:
+            Math.round((sellerItemsTotal - proportionalPlatformFee) * 100) /
+            100, // Revenue minus platform fee
+        },
+
+        // Status Information (for seller's items)
+        status: {
+          orderPaymentCompleted: order.payment_completed,
+          itemsOrderStatus: overallStatus,
+          itemsPaymentStatus: overallPaymentStatus,
+          statusDetails: statusArray,
+          paymentStatusDetails: paymentStatusArray,
+        },
+
+        // Shipping Information
+        shippingInfo: {
           shippingAddress: order.shipping_address,
           trackingNumber: order.tracking_number,
-          paymentCompleted: order.payment_completed,
           requiresRetipping: order.requires_retipping,
           shipstationId: order.shipstation_id,
+        },
 
-          // Buyer Details
-          buyer: {
-            id: order.buyer?.id,
-            firstName: order.buyer?.first_name,
-            lastName: order.buyer?.last_name,
-            fullName: order.buyer
-              ? `${order.buyer.first_name} ${order.buyer.last_name}`
-              : null,
-            email: order.buyer?.email,
-          },
-
-          // Product Details
-          product: {
-            id: item.product.id,
-            title: item.product.title,
-            image: item.product.images?.[0] || null,
-            originalPrice: parseFloat(item.product.price),
-            category: item.product.category,
-            condition: item.product.condition,
-            requiresRetipping: item.product.requires_retipping,
-            stockRemaining: item.product.quantity,
-          },
-
-          // Timestamps
-          orderCreatedAt: order.created_at,
-          orderUpdatedAt: order.updated_at,
-          itemCreatedAt: item.created_at,
-          itemUpdatedAt: item.updated_at,
-        });
-      });
+        // Seller-specific information
+        sellerInfo: {
+          totalSellerItems: sellerItems.length,
+          sellerProductIds: sellerItems.map((item) => item.product_id),
+          hasRetippingItems: sellerItems.some(
+            (item) => item.product?.requires_retipping
+          ),
+          allItemsShipped: sellerItems.every(
+            (item) => item.order_status === "shipped"
+          ),
+          allItemsPaid: sellerItems.every(
+            (item) => item.payment_status === true
+          ),
+        },
+      };
     });
+
+    const totalPages = Math.ceil(count / parseInt(limit));
 
     res.status(200).json({
       success: true,
       data: {
-        orders: individualOrderItems,
-        totalOrders: individualOrderItems.length,
+        orders: processedOrders,
+        totalOrders: count,
+        totalPages: totalPages,
+        currentPage: parseInt(page),
+        itemsPerPage: parseInt(limit),
+        sellerId: userId,
+        totalSellerProducts: productIds.length,
       },
     });
   } catch (error) {

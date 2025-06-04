@@ -81,6 +81,8 @@ exports.convertToSeller = async (req, res) => {
       countryOfRegistration,
       businessAddress,
       websiteUrl,
+      city,
+      postalCode,
     } = req.body;
 
     // Debug log to check what we're receiving
@@ -131,6 +133,8 @@ exports.convertToSeller = async (req, res) => {
       license_image_path: licenseImageUrl,
       seller_approval_status: "pending",
       seller_verified: false,
+      city: city,
+      postal_code: postalCode,
     });
 
     // Return updated user data (excluding sensitive information)

@@ -46,6 +46,22 @@ const Product = sequelize.define(
       allowNull: false,
       defaultValue: 1,
     },
+    weight: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    height: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    width: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    length: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
     condition: {
       type: DataTypes.STRING,
       allowNull: false,

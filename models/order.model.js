@@ -17,6 +17,14 @@ const Order = sequelize.define(
         key: "id",
       },
     },
+    shipstation_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    carrier_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     total_amount: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
