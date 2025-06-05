@@ -23,7 +23,7 @@ const ProductFlaggingRoutes = require("./api/v1/routes/flagProducts.routes");
 const CategoryCommissionRoutes = require("./api/v1/routes/commission.routes");
 const OrderDisputeRoutes = require("./api/v1/routes/orderDisputes.routes");
 const shipstationRoutes = require("./api/v1/routes/shipment.routes");
-
+const OrderAnalyticsRoutes = require("./api/v1/routes/orderAnalytics.routes");
 const { setupChatSocket } = require("./api/v1/socket/chatSocket");
 const ChatRoutes = require("./api/v1/routes/chat.routes");
 const http = require("http");
@@ -76,6 +76,7 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/sellerdashboard", SellerDashboardRoutes);
+app.use("/api/orderanalytics", OrderAnalyticsRoutes);
 app.use("/api/orders", OrdersRoutes);
 app.use("/api/user", UserRoutes);
 app.use("/api/orderdispute", OrderDisputeRoutes);
