@@ -5,6 +5,7 @@ const {
   convertToSeller,
   getAllUsers,
   getUserInsights,
+  updateUserVerification,
   suspendUser,
 } = require("../controllers/user.controller");
 
@@ -31,5 +32,6 @@ router.put(
   upload.single("licenseImage"),
   convertToSeller
 );
+router.patch("/verify/:userId", updateUserVerification);
 
 module.exports = router;

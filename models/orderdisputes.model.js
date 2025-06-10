@@ -80,9 +80,12 @@ const OrderDispute = sequelize.define(
       defaultValue: "open",
       allowNull: false,
     },
-    admin_response: {
-      type: DataTypes.TEXT,
+    // Updated field to store all responses in chronological order
+    responses: {
+      type: DataTypes.JSON, // Using JSON instead of ARRAY for better structure
       allowNull: true,
+      defaultValue: [],
+      comment: "Array of response objects with sender, message, timestamp",
     },
     resolved_at: {
       type: DataTypes.DATE,
@@ -94,6 +97,50 @@ const OrderDispute = sequelize.define(
     createdAt: "created_at",
     updatedAt: "updated_at",
     tableName: "order_disputes",
+
+    // Instance methods for managing responses
+    instanceMethods: {
+      // Add a new response to the dispute
+      addResponse: function (senderType, senderId, senderName, message) {
+        const newResponse = {
+          id: require("crypto").randomUUID(),
+          sender_type: senderType, // 'user' or 'admin'
+          sender_id: senderId,
+          sender_name: senderName,
+          message: message,
+          timestamp: new Date().toISOString(),
+          created_at: new Date(),
+        };
+
+        this.responses = [...(this.responses || []), newResponse];
+        return this.save();
+      },
+
+      // Get responses sorted chronologically
+      getResponsesChronologically: function () {
+        return (this.responses || []).sort(
+          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        );
+      },
+
+      // Get latest response
+      getLatestResponse: function () {
+        const responses = this.getResponsesChronologically();
+        return responses.length > 0 ? responses[responses.length - 1] : null;
+      },
+
+      // Check if waiting for admin response
+      isWaitingForAdmin: function () {
+        const latestResponse = this.getLatestResponse();
+        return !latestResponse || latestResponse.sender_type === "user";
+      },
+
+      // Check if waiting for user response
+      isWaitingForUser: function () {
+        const latestResponse = this.getLatestResponse();
+        return latestResponse && latestResponse.sender_type === "admin";
+      },
+    },
   }
 );
 

@@ -1,4 +1,10 @@
-const { User, Product, Order, OrderItem } = require("../../../models");
+const {
+  User,
+  Product,
+  Order,
+  OrderItem,
+  OrderDispute,
+} = require("../../../models");
 const { ProductListing } = require("../../../models/ProductListing.model");
 const { sequelize } = require("../../../config/db");
 const AWS = require("aws-sdk");
@@ -558,7 +564,191 @@ exports.getUserInsights = async (req, res) => {
     });
   }
 };
+async function getSellerDisputePerformance(userId, transaction) {
+  try {
+    // Get dispute data for this seller
+    const disputeData = await sequelize.query(
+      `
+      SELECT 
+        od.dispute_status,
+        od.dispute_category,
+        od.created_at,
+        od.resolved_at,
+        p.title as product_title,
+        p.category as product_category
+      FROM order_disputes od
+      JOIN products p ON od.product_id = p.id
+      WHERE p.user_id = :userId
+      ORDER BY od.created_at DESC
+    `,
+      {
+        replacements: { userId },
+        type: sequelize.QueryTypes.SELECT,
+        transaction,
+      }
+    );
 
+    if (!disputeData || disputeData.length === 0) {
+      return {
+        totalDisputes: 0,
+        resolvedDisputes: 0,
+        openDisputes: 0,
+        inProgressDisputes: 0,
+        rejectedDisputes: 0,
+        resolutionRatio: "0:0",
+        resolutionRate: "0%",
+        commonDispute: "None",
+        averageResolutionTime: 0,
+        performanceRating: "No Data",
+        recentDisputes: [],
+      };
+    }
+
+    // Calculate dispute metrics
+    const totalDisputes = disputeData.length;
+    const resolvedDisputes = disputeData.filter(
+      (d) => d.dispute_status === "resolved"
+    ).length;
+    const closedDisputes = disputeData.filter(
+      (d) => d.dispute_status === "closed"
+    ).length;
+    const openDisputes = disputeData.filter(
+      (d) => d.dispute_status === "open"
+    ).length;
+    const inProgressDisputes = disputeData.filter(
+      (d) => d.dispute_status === "in_progress"
+    ).length;
+    const rejectedDisputes = disputeData.filter(
+      (d) => d.dispute_status === "rejected"
+    ).length;
+
+    const totalResolvedClosed = resolvedDisputes + closedDisputes;
+    const resolutionRate =
+      totalDisputes > 0
+        ? ((totalResolvedClosed / totalDisputes) * 100).toFixed(1)
+        : "0";
+
+    // Find most common dispute category
+    const categoryCount = {};
+    disputeData.forEach((d) => {
+      categoryCount[d.dispute_category] =
+        (categoryCount[d.dispute_category] || 0) + 1;
+    });
+
+    const commonDispute =
+      Object.keys(categoryCount).length > 0
+        ? Object.keys(categoryCount).reduce((a, b) =>
+            categoryCount[a] > categoryCount[b] ? a : b
+          )
+        : "None";
+
+    // Convert category to readable format
+    const categoryMap = {
+      product_quality: "Product Quality",
+      shipping_delay: "Shipping Delay",
+      wrong_item: "Wrong Item",
+      damaged_item: "Damaged Item",
+      not_received: "Not Received",
+      billing_issue: "Billing Issue",
+      refund_request: "Refund Request",
+      other: "Other",
+    };
+
+    // Calculate average resolution time for resolved disputes
+    const resolvedDisputesWithTime = disputeData.filter(
+      (d) =>
+        (d.dispute_status === "resolved" || d.dispute_status === "closed") &&
+        d.resolved_at &&
+        d.created_at
+    );
+
+    let averageResolutionTime = 0;
+    if (resolvedDisputesWithTime.length > 0) {
+      const totalResolutionTime = resolvedDisputesWithTime.reduce((sum, d) => {
+        const resolutionTime =
+          (new Date(d.resolved_at) - new Date(d.created_at)) /
+          (1000 * 60 * 60 * 24);
+        return sum + resolutionTime;
+      }, 0);
+      averageResolutionTime = (
+        totalResolutionTime / resolvedDisputesWithTime.length
+      ).toFixed(1);
+    }
+
+    // Performance rating based on resolution rate
+    let performanceRating = "Poor";
+    if (totalDisputes === 0) performanceRating = "No Data";
+    else if (parseFloat(resolutionRate) >= 90) performanceRating = "Excellent";
+    else if (parseFloat(resolutionRate) >= 75) performanceRating = "Good";
+    else if (parseFloat(resolutionRate) >= 60) performanceRating = "Average";
+
+    // Recent disputes (last 5)
+    const recentDisputes = disputeData.slice(0, 5).map((d) => ({
+      category: categoryMap[d.dispute_category] || d.dispute_category,
+      status: d.dispute_status,
+      productTitle: d.product_title,
+      createdAt: d.created_at,
+      resolvedAt: d.resolved_at,
+    }));
+
+    return {
+      totalDisputes,
+      resolvedDisputes,
+      openDisputes,
+      inProgressDisputes,
+      rejectedDisputes,
+      resolutionRatio: `${totalResolvedClosed}:${
+        openDisputes + inProgressDisputes
+      }`,
+      resolutionRate: `${resolutionRate}%`,
+      commonDispute: categoryMap[commonDispute] || commonDispute,
+      averageResolutionTime: parseFloat(averageResolutionTime),
+      performanceRating,
+      recentDisputes,
+      // Additional metrics for detailed analysis if needed
+      disputesByCategory: {
+        product_quality: disputeData.filter(
+          (d) => d.dispute_category === "product_quality"
+        ).length,
+        shipping_delay: disputeData.filter(
+          (d) => d.dispute_category === "shipping_delay"
+        ).length,
+        wrong_item: disputeData.filter(
+          (d) => d.dispute_category === "wrong_item"
+        ).length,
+        damaged_item: disputeData.filter(
+          (d) => d.dispute_category === "damaged_item"
+        ).length,
+        not_received: disputeData.filter(
+          (d) => d.dispute_category === "not_received"
+        ).length,
+        billing_issue: disputeData.filter(
+          (d) => d.dispute_category === "billing_issue"
+        ).length,
+        refund_request: disputeData.filter(
+          (d) => d.dispute_category === "refund_request"
+        ).length,
+        other: disputeData.filter((d) => d.dispute_category === "other").length,
+      },
+    };
+  } catch (error) {
+    console.error("Error calculating seller dispute performance:", error);
+    return {
+      totalDisputes: 0,
+      resolvedDisputes: 0,
+      openDisputes: 0,
+      inProgressDisputes: 0,
+      rejectedDisputes: 0,
+      resolutionRatio: "Error",
+      resolutionRate: "Error",
+      commonDispute: "Error calculating",
+      averageResolutionTime: 0,
+      performanceRating: "Error",
+      recentDisputes: [],
+      error: error.message,
+    };
+  }
+}
 async function getSellerInsights(userId, transaction) {
   // Get current date and date ranges
   const now = new Date();
@@ -742,6 +932,10 @@ async function getSellerInsights(userId, transaction) {
     },
     transaction,
   });
+  const disputePerformance = await getSellerDisputePerformance(
+    userId,
+    transaction
+  );
 
   return {
     listingOverview: {
@@ -777,13 +971,7 @@ async function getSellerInsights(userId, transaction) {
       activeProducts: parseInt(c.active_products),
     })),
     // Mock dispute data since you don't have disputes table yet
-    disputePerformance: {
-      totalDisputes: 5,
-      resolvedDisputes: 3,
-      openDisputes: 2,
-      resolutionRatio: "3:2",
-      commonDispute: "Late delivery",
-    },
+    disputePerformance,
   };
 }
 async function getBuyerInsights(userId, transaction) {
@@ -1000,3 +1188,55 @@ async function getBuyerInsights(userId, transaction) {
     })),
   };
 }
+
+exports.updateUserVerification = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { verificationType = "email" } = req.body; // 'email' or 'seller'
+
+    // Find user by ID
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Determine which verification field to update
+    const updateData = {};
+    if (verificationType === "email") {
+      updateData.email_verified = true;
+    } else if (verificationType === "seller") {
+      updateData.seller_verified = true;
+      updateData.seller_approval_status = "approved";
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification type. Use 'email' or 'seller'",
+      });
+    }
+
+    // Update the user
+    await user.update(updateData);
+
+    // Fetch updated user data (excluding password)
+    const updatedUser = await User.findByPk(userId, {
+      attributes: { exclude: ["password_hash"] },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `User ${verificationType} verification updated successfully`,
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("Update user verification error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating user verification",
+      error: error.message,
+    });
+  }
+};

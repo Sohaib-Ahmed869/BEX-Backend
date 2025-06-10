@@ -140,25 +140,6 @@ const FlaggedProducts = sequelize.define(
 );
 
 // Define associations
-FlaggedProducts.associate = (models) => {
-  // Belongs to Product
-  FlaggedProducts.belongsTo(models.Product, {
-    foreignKey: "product_id",
-    as: "product",
-  });
-
-  // Belongs to User (flagged by)
-  FlaggedProducts.belongsTo(models.User, {
-    foreignKey: "flagged_by",
-    as: "flagger",
-  });
-
-  // Belongs to User (resolved by)
-  FlaggedProducts.belongsTo(models.User, {
-    foreignKey: "resolved_by",
-    as: "resolver",
-  });
-};
 
 module.exports = {
   FlaggedProducts,

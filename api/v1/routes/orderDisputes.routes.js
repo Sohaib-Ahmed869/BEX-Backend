@@ -7,6 +7,8 @@ const {
   updateDisputeStatus,
   updateDispute,
   getDisputeStatistics,
+  addDisputeResponse,
+  getDisputeChat,
 } = require("../controllers/orderDisputes.controller");
 
 const router = express.Router();
@@ -15,6 +17,10 @@ const router = express.Router();
 router.get("/admin/all-disputes", getAllDisputes);
 router.get("/admin/statistics", getDisputeStatistics);
 router.put("/admin/:disputeId/status", updateDisputeStatus);
+
+// Chat/Response routes (NEW)
+router.post("/:disputeId/response", addDisputeResponse);
+router.get("/:disputeId/chat", getDisputeChat);
 
 // Public/User routes (specific routes FIRST)
 router.post("/create", createDispute);

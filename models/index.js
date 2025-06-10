@@ -18,6 +18,7 @@ const { ProductListing } = require("./ProductListing.model");
 const OrderDispute = require("./orderdisputes.model");
 const { Chat } = require("./chat.model");
 const { Message } = require("./message.model");
+const { FlaggedProducts } = require("./flagged-products.model");
 
 // Order - OrderItem associations
 Order.hasMany(OrderItem, {
@@ -218,13 +219,30 @@ Chat.belongsTo(Product, {
 });
 
 Message.belongsTo(User, { foreignKey: "sender_id", as: "sender" });
+// Flag Products
+FlaggedProducts.belongsTo(Product, {
+  foreignKey: "product_id",
+  as: "product",
+});
 
+// Belongs to User (flagged by)
+FlaggedProducts.belongsTo(User, {
+  foreignKey: "flagged_by",
+  as: "flagger",
+});
+
+// Belongs to User (resolved by)
+FlaggedProducts.belongsTo(User, {
+  foreignKey: "resolved_by",
+  as: "resolver",
+});
 module.exports = {
   User,
   Company,
   ProductType,
   Cart,
   CartItem,
+  FlaggedProducts,
   ConditionQuestion,
   DrillBit,
   Inventory,

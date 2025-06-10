@@ -1,4 +1,9 @@
-const { Product, ProductRetippingDetails } = require("../../../models");
+const {
+  Product,
+  ProductRetippingDetails,
+  User,
+  FlaggedProducts,
+} = require("../../../models");
 const { ProductListing } = require("../../../models/ProductListing.model");
 const { sequelize } = require("../../../config/db");
 const AWS = require("aws-sdk");
@@ -190,7 +195,7 @@ exports.getProducts = async (req, res) => {
     };
 
     if (isAssociationDefined) {
-      // If association exists, include the retipping details
+      // If association exists, include the retipping details and user information
       products = await Product.findAll({
         where: whereCondition,
         include: [
@@ -206,16 +211,48 @@ exports.getProducts = async (req, res) => {
             ],
             required: false, // LEFT JOIN - include products even without retipping details
           },
+          {
+            model: User,
+            as: "seller", // Using the correct alias from your association
+            attributes: ["seller_approval_status"],
+            required: false, // LEFT JOIN - include products even if user info is missing
+          },
         ],
         order: [["created_at", "DESC"]],
       });
     } else {
-      // If association doesn't exist, fetch products without including retipping details
+      // If association doesn't exist, fetch products with user information
       products = await Product.findAll({
         where: whereCondition,
+        include: [
+          {
+            model: User,
+            as: "seller", // Using the correct alias from your association
+            attributes: ["seller_approval_status"],
+            required: false, // LEFT JOIN - include products even if user info is missing
+          },
+        ],
         order: [["created_at", "DESC"]],
       });
     }
+
+    // Transform the products to include is_verified field
+    const transformedProducts = products.map((product) => {
+      const productData = product.toJSON();
+
+      // Check if the seller is approved
+      const isVerified =
+        productData.seller &&
+        productData.seller.seller_approval_status === "approved";
+
+      // Add is_verified field and remove the seller data from the response
+      const { seller, ...productWithoutSeller } = productData;
+
+      return {
+        ...productWithoutSeller,
+        is_verified: isVerified,
+      };
+    });
 
     // Log the unique user_ids for debugging
     const uniqueUserIds = [
@@ -227,8 +264,8 @@ exports.getProducts = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: products,
-      totalCount: products.length,
+      data: transformedProducts,
+      totalCount: transformedProducts.length,
     });
   } catch (error) {
     console.error("Error fetching products:", error);
@@ -238,6 +275,70 @@ exports.getProducts = async (req, res) => {
     });
   }
 };
+// exports.getProducts = async (req, res) => {
+//   try {
+//     // First, check if the association exists
+//     const isAssociationDefined =
+//       Product.associations && Product.associations.retippingDetails;
+
+//     let products;
+
+//     // Base where condition to exclude archived products
+//     const whereCondition = {
+//       is_Archived: false,
+//       is_flagged: false,
+//       list_for_selling: true,
+//     };
+
+//     if (isAssociationDefined) {
+//       // If association exists, include the retipping details
+//       products = await Product.findAll({
+//         where: whereCondition,
+//         include: [
+//           {
+//             model: ProductRetippingDetails,
+//             as: "retipping_details",
+//             attributes: [
+//               "diameter",
+//               "enable_diy",
+//               "per_segment_price",
+//               "segments",
+//               "total_price",
+//             ],
+//             required: false, // LEFT JOIN - include products even without retipping details
+//           },
+//         ],
+//         order: [["created_at", "DESC"]],
+//       });
+//     } else {
+//       // If association doesn't exist, fetch products without including retipping details
+//       products = await Product.findAll({
+//         where: whereCondition,
+//         order: [["created_at", "DESC"]],
+//       });
+//     }
+
+//     // Log the unique user_ids for debugging
+//     const uniqueUserIds = [
+//       ...new Set(products.map((product) => product.user_id)),
+//     ];
+//     console.log(
+//       `Found ${products.length} non-archived products from ${uniqueUserIds.length} unique sellers`
+//     );
+
+//     return res.status(200).json({
+//       success: true,
+//       data: products,
+//       totalCount: products.length,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching products:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
 exports.getAllProducts = async (req, res) => {
   try {
     // Extract pagination parameters from query string
@@ -270,7 +371,6 @@ exports.getAllProducts = async (req, res) => {
     // Base where condition to exclude archived products
     const whereCondition = {
       is_Archived: false,
-      is_flagged: false,
       list_for_selling: true,
 
       // Only fetch non-archived products
@@ -434,6 +534,41 @@ exports.getProductById = async (req, res) => {
     // If retipping details exist, add them to the product
     if (retippingDetails) {
       productData.retippingDetails = retippingDetails.get({ plain: true });
+    }
+
+    // Check if product is flagged and get flagging details
+    if (productData.is_flagged) {
+      // Import FlaggedProducts model (adjust path as needed)
+
+      const flaggingDetails = await FlaggedProducts.findAll({
+        where: {
+          product_id: productId,
+          status: ["PENDING", "REVIEWED"], // Only get active flags
+        },
+        attributes: [
+          "id",
+          "flagging_reason",
+          "severity_level",
+          "description",
+          "status",
+          "created_at",
+          "notes",
+        ],
+        include: [
+          {
+            model: User, // Assuming you have User model imported
+            as: "flagger",
+            attributes: ["id", "first_name", "email"], // Adjust attributes as needed
+          },
+        ],
+        order: [["created_at", "DESC"]], // Most recent flags first
+      });
+
+      if (flaggingDetails && flaggingDetails.length > 0) {
+        productData.flaggingDetails = flaggingDetails.map((flag) =>
+          flag.get({ plain: true })
+        );
+      }
     }
 
     return res.status(200).json({
@@ -887,6 +1022,79 @@ exports.searchProducts = async (req, res) => {
     });
   } catch (error) {
     return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+exports.toggleFeatureProduct = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const { productId } = req.params;
+    const { is_featured } = req.body;
+
+    // Validate required fields
+    if (typeof is_featured !== "boolean") {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "is_featured field is required and must be a boolean value",
+      });
+    }
+
+    // Check if product exists
+    const product = await Product.findByPk(productId, { transaction });
+    if (!product) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    // Check if the product is already in the requested state
+    if (product.is_featured === is_featured) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Product is already ${
+          is_featured ? "featured" : "unfeatured"
+        }`,
+      });
+    }
+
+    // If trying to feature a product, check if it's active and not archived
+    if (is_featured && (!product.is_active || product.is_Archived)) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Cannot feature inactive or archived products",
+      });
+    }
+
+    // Update the product's featured status
+    await product.update({ is_featured }, { transaction });
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: `Product ${
+        is_featured ? "featured" : "unfeatured"
+      } successfully`,
+      data: {
+        product_id: productId,
+        is_featured,
+        title: product.title,
+        category: product.category,
+        updated_at: product.updated_at,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error toggling product feature status:", error);
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

@@ -10,6 +10,7 @@ const {
   getFeaturedProducts,
   getProducts,
   searchProducts,
+  toggleFeatureProduct,
   getAllProducts,
 } = require("../controllers/products.controller");
 
@@ -33,7 +34,7 @@ router.put("/update/:productId", upload.array("files", 10), updateProduct);
 
 // DELETE routes
 router.delete("/:productId", deleteProduct);
-
+router.patch("/:productId/toggle-feature", toggleFeatureProduct);
 // DYNAMIC PARAMETER ROUTES LAST
 router.get("/:userId", getUserProducts);
 
