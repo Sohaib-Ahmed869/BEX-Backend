@@ -2,182 +2,11 @@ const { Order, OrderItem, Product, User } = require("../../../models");
 const { Op } = require("sequelize");
 const { sequelize } = require("../../../config/db");
 const { ProductListing } = require("../../../models/ProductListing.model");
-// exports.getSellerOrders = async (req, res) => {
-//   try {
-//     const { userId } = req.params;
-//     const { status, paymentStatus, startDate, endDate } = req.query;
+const {
+  sendOrderConfirmationEmail,
+  sendOrderRejectionEmail,
+} = require("../../../utils/EmailService");
 
-//     // Get seller's products
-//     const sellerProducts = await Product.findAll({
-//       where: { user_id: userId },
-//       attributes: ["id"],
-//     });
-
-//     const productIds = sellerProducts.map((p) => p.id);
-
-//     if (productIds.length === 0) {
-//       return res.status(200).json({
-//         success: true,
-//         data: {
-//           orders: [],
-//           totalOrders: 0,
-//         },
-//       });
-//     }
-
-//     // Build where clause for filtering
-//     let orderWhereClause = {};
-//     let orderItemWhereClause = { product_id: { [Op.in]: productIds } };
-
-//     // Date filtering
-//     if (startDate && endDate) {
-//       orderWhereClause.order_date = {
-//         [Op.between]: [new Date(startDate), new Date(endDate)],
-//       };
-//     } else if (startDate) {
-//       orderWhereClause.order_date = {
-//         [Op.gte]: new Date(startDate),
-//       };
-//     } else if (endDate) {
-//       orderWhereClause.order_date = {
-//         [Op.lte]: new Date(endDate),
-//       };
-//     }
-
-//     // Status filtering
-//     if (status) {
-//       orderItemWhereClause.order_status = status;
-//     }
-
-//     // Payment status filtering
-//     if (paymentStatus !== undefined) {
-//       orderItemWhereClause.payment_status = paymentStatus === "true";
-//     }
-
-//     // Get orders containing seller's products within filters
-//     const ordersWithItems = await Order.findAll({
-//       include: [
-//         {
-//           model: OrderItem,
-//           as: "items",
-//           where: orderItemWhereClause,
-//           include: [
-//             {
-//               model: Product,
-//               as: "product",
-//               attributes: [
-//                 "id",
-//                 "title",
-//                 "images",
-//                 "price",
-//                 "quantity",
-//                 "category",
-//                 "condition",
-//                 "requires_retipping",
-//               ],
-//             },
-//           ],
-//         },
-//         {
-//           model: User,
-//           as: "buyer",
-//           attributes: ["id", "first_name", "last_name", "email"],
-//           foreignKey: "buyer_id",
-//         },
-//       ],
-//       where: orderWhereClause,
-//       order: [["order_date", "DESC"]],
-//       distinct: true,
-//     });
-
-//     // Flatten order items into individual entries
-//     const individualOrderItems = [];
-
-//     ordersWithItems.forEach((order) => {
-//       // Filter only seller's products from the order items
-//       const sellerItems = order.items.filter((item) =>
-//         productIds.includes(item.product_id)
-//       );
-
-//       sellerItems.forEach((item) => {
-//         const itemTotal = parseFloat(item.price) * item.quantity;
-//         const retipTotal = parseFloat(item.retip_price) || 0;
-//         const grandTotal = itemTotal + retipTotal;
-
-//         individualOrderItems.push({
-//           // Order Item Details
-//           orderItemId: item.id,
-//           productId: item.product_id,
-//           quantity: item.quantity,
-//           price: parseFloat(item.price),
-//           itemTitle: item.title,
-//           retipAdded: item.retip_added,
-//           retipPrice: retipTotal,
-//           orderStatus: item.order_status,
-//           paymentStatus: item.payment_status,
-
-//           // Calculated totals for this item
-//           itemTotal: Math.round(itemTotal * 100) / 100,
-//           retipTotal: Math.round(retipTotal * 100) / 100,
-//           grandTotal: Math.round(grandTotal * 100) / 100,
-
-//           // Order Details
-//           orderId: order.id,
-//           orderDate: order.order_date,
-//           shippingAddress: order.shipping_address,
-//           trackingNumber: order.tracking_number,
-//           paymentCompleted: order.payment_completed,
-//           requiresRetipping: order.requires_retipping,
-//           shipstationId: order.shipstation_id,
-
-//           // Buyer Details
-//           buyer: {
-//             id: order.buyer?.id,
-//             firstName: order.buyer?.first_name,
-//             lastName: order.buyer?.last_name,
-//             fullName: order.buyer
-//               ? `${order.buyer.first_name} ${order.buyer.last_name}`
-//               : null,
-//             email: order.buyer?.email,
-//           },
-
-//           // Product Details
-//           product: {
-//             id: item.product.id,
-//             title: item.product.title,
-//             image: item.product.images?.[0] || null,
-//             originalPrice: parseFloat(item.product.price),
-//             category: item.product.category,
-//             condition: item.product.condition,
-//             requiresRetipping: item.product.requires_retipping,
-//             stockRemaining: item.product.quantity,
-//           },
-
-//           // Timestamps
-//           orderCreatedAt: order.created_at,
-//           orderUpdatedAt: order.updated_at,
-//           itemCreatedAt: item.created_at,
-//           itemUpdatedAt: item.updated_at,
-//         });
-//       });
-//     });
-
-//     res.status(200).json({
-//       success: true,
-//       data: {
-//         orders: individualOrderItems,
-//         totalOrders: individualOrderItems.length,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Get seller orders error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Error fetching seller orders",
-//       error: error.message,
-//     });
-//   }
-// };
 exports.getSellerOrders = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -765,14 +594,35 @@ exports.getSingleOrderItem = async (req, res) => {
     });
   }
 };
+
 exports.confirmOrder = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
     const { itemId } = req.params;
 
-    // Find the order item
-    const orderItem = await OrderItem.findByPk(itemId, { transaction });
+    // Find the order item with order details
+    const orderItem = await OrderItem.findByPk(itemId, {
+      include: [
+        {
+          model: Order,
+          as: "order", // Make sure this association is defined in your models
+          include: [
+            {
+              model: User,
+              as: "buyer", // Make sure this association is defined in your models
+              attributes: ["id", "email", "first_name", "last_name"],
+            },
+          ],
+        },
+        {
+          model: Product,
+          as: "product", // Make sure this association is defined in your models
+          attributes: ["id", "title", "quantity", "images", "listing_id"],
+        },
+      ],
+      transaction,
+    });
 
     if (!orderItem) {
       await transaction.rollback();
@@ -791,10 +641,12 @@ exports.confirmOrder = async (req, res) => {
       });
     }
 
-    // Get product details
-    const product = await Product.findByPk(orderItem.product_id, {
-      transaction,
-    });
+    // Get product details (if not included in the query above)
+    const product =
+      orderItem.product ||
+      (await Product.findByPk(orderItem.product_id, {
+        transaction,
+      }));
 
     if (!product) {
       await transaction.rollback();
@@ -841,7 +693,7 @@ exports.confirmOrder = async (req, res) => {
       });
 
       if (productListing) {
-        const newStock = Math.max(0, productListing.Stock - 1); // Ensure stock doesn't go below 0
+        const newStock = Math.max(0, productListing.Stock - 1);
 
         await ProductListing.update(
           { Stock: newStock },
@@ -855,6 +707,50 @@ exports.confirmOrder = async (req, res) => {
 
     // Commit the transaction
     await transaction.commit();
+
+    // Get the first image from the product images array
+    const productImage =
+      product.images && product.images.length > 0 ? product.images[0] : null;
+
+    // Prepare order data for email
+    const orderData = {
+      id: orderItem.order.id,
+      items: [
+        {
+          product_name: orderItem.title,
+          quantity: orderItem.quantity,
+          price: orderItem.price,
+          product_image: productImage, // Pass the image with each item
+          seller_name: null, // Add seller info if available in your data structure
+        },
+      ],
+      total_amount: orderItem.order.total_amount,
+      shipping_address: formatShippingAddress(orderItem.order.shipping_address),
+      payment_method: "Card", // Update based on your payment method data
+    };
+
+    // Prepare user data for email
+    const userData = {
+      email: orderItem.order.buyer.email,
+      first_name: orderItem.order.buyer.first_name,
+      last_name: orderItem.order.buyer.last_name,
+    };
+
+    // Send confirmation email (don't await to avoid blocking the response)
+    sendOrderConfirmationEmail(orderData, userData)
+      .then((emailResult) => {
+        if (!emailResult.success) {
+          console.error(
+            "Failed to send order confirmation email:",
+            emailResult.message
+          );
+        } else {
+          console.log("Order confirmation email sent successfully");
+        }
+      })
+      .catch((error) => {
+        console.error("Error sending order confirmation email:", error);
+      });
 
     res.status(200).json({
       success: true,
@@ -876,14 +772,92 @@ exports.confirmOrder = async (req, res) => {
     });
   }
 };
+
+// Helper function to format shipping address
+function formatShippingAddress(shippingAddress) {
+  if (typeof shippingAddress === "string") {
+    return shippingAddress;
+  }
+
+  // If shipping_address is a JSON object with nested structure
+  if (typeof shippingAddress === "object" && shippingAddress !== null) {
+    const { name, email, address } = shippingAddress;
+
+    // If address is nested under an 'address' object
+    if (address && typeof address === "object") {
+      const { line1, line2, city, state, postal_code, country } = address;
+
+      // Build address string
+      let addressParts = [];
+
+      if (line1) addressParts.push(line1);
+      if (line2 && line2.trim() !== "") addressParts.push(line2);
+      if (city) addressParts.push(city);
+      if (state) addressParts.push(state);
+      if (postal_code) addressParts.push(postal_code);
+      if (country) addressParts.push(country);
+
+      const formattedAddress = addressParts.join(", ");
+
+      // Return formatted string with name and address
+      return {
+        name: name || "N/A",
+        email: email || "N/A",
+        address: formattedAddress || "Address not available",
+      };
+    }
+
+    // Fallback for old format (direct address fields)
+    const { street, city, state, postal_code, country } = shippingAddress;
+    const addressStr = `${street || ""}, ${city || ""}, ${state || ""} ${
+      postal_code || ""
+    }, ${country || ""}`
+      .replace(/,\s*,/g, ",")
+      .replace(/^,\s*|,\s*$/g, "");
+
+    return {
+      name: shippingAddress.name || "N/A",
+      email: shippingAddress.email || "N/A",
+      address: addressStr || "Address not available",
+    };
+  }
+
+  return {
+    name: "N/A",
+    email: "N/A",
+    address: "Address not available",
+  };
+}
+
+// Admin endpoints for orders
 exports.rejectOrder = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
     const { itemId } = req.params;
 
-    // Find the order item
-    const orderItem = await OrderItem.findByPk(itemId, { transaction });
+    // Find the order item with order details (same as confirmOrder)
+    const orderItem = await OrderItem.findByPk(itemId, {
+      include: [
+        {
+          model: Order,
+          as: "order", // Make sure this association is defined in your models
+          include: [
+            {
+              model: User,
+              as: "buyer", // Make sure this association is defined in your models
+              attributes: ["id", "email", "first_name", "last_name"],
+            },
+          ],
+        },
+        {
+          model: Product,
+          as: "product", // Make sure this association is defined in your models
+          attributes: ["id", "title", "quantity", "images", "listing_id"],
+        },
+      ],
+      transaction,
+    });
 
     if (!orderItem) {
       await transaction.rollback();
@@ -914,6 +888,52 @@ exports.rejectOrder = async (req, res) => {
     // Commit the transaction
     await transaction.commit();
 
+    // Get the first image from the product images array
+    const productImage =
+      orderItem.product.images && orderItem.product.images.length > 0
+        ? orderItem.product.images[0]
+        : null;
+
+    // Prepare order data for email (same structure as confirmOrder)
+    const orderData = {
+      id: orderItem.order.id,
+      items: [
+        {
+          product_name: orderItem.title,
+          quantity: orderItem.quantity,
+          price: orderItem.price,
+          product_image: productImage, // Pass the image with each item
+          seller_name: null, // Add seller info if available in your data structure
+        },
+      ],
+      total_amount: orderItem.order.total_amount,
+      shipping_address: formatShippingAddress(orderItem.order.shipping_address),
+      payment_method: "Card", // Update based on your payment method data
+    };
+
+    // Prepare user data for email (same structure as confirmOrder)
+    const userData = {
+      email: orderItem.order.buyer.email,
+      first_name: orderItem.order.buyer.first_name,
+      last_name: orderItem.order.buyer.last_name,
+    };
+
+    // Send rejection email (don't await to avoid blocking the response)
+    sendOrderRejectionEmail(orderData, userData)
+      .then((emailResult) => {
+        if (!emailResult.success) {
+          console.error(
+            "Failed to send order rejection email:",
+            emailResult.message
+          );
+        } else {
+          console.log("Order rejection email sent successfully");
+        }
+      })
+      .catch((error) => {
+        console.error("Error sending order rejection email:", error);
+      });
+
     res.status(200).json({
       success: true,
       message: "Order rejected successfully",
@@ -933,7 +953,6 @@ exports.rejectOrder = async (req, res) => {
     });
   }
 };
-// Admin endpoints for orders
 // Endpoint 1: Get all orders for admin (order-level view with item summaries)
 exports.getAllOrders = async (req, res) => {
   try {

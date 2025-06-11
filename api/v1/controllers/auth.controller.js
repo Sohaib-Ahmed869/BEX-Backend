@@ -4,6 +4,10 @@ const User = require("../../../models/user.model");
 const AWS = require("aws-sdk");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
+const {
+  sendBuyerRegistrationEmail,
+  sendSellerRegistrationEmail,
+} = require("../../../utils/EmailService");
 require("dotenv").config();
 
 // Configure AWS S3
@@ -81,6 +85,15 @@ const RegisterBuyer = async (req, res) => {
         role: newUser.role,
       },
     });
+    try {
+      await sendBuyerRegistrationEmail({
+        email: newUser.email,
+        first_name: newUser.first_name,
+        last_name: newUser.last_name,
+      });
+    } catch (e) {
+      console.log(e);
+    }
   } catch (error) {
     console.error("Signup error:", error);
     res
@@ -183,6 +196,16 @@ const RegisterSeller = async (req, res) => {
         seller_approval_status: newSeller.seller_approval_status,
       },
     });
+    try {
+      await sendSellerRegistrationEmail({
+        email: newSeller.email,
+        first_name: newSeller.first_name,
+        last_name: newSeller.last_name,
+        company_name: newSeller.company_name,
+      });
+    } catch (e) {
+      console.log(e);
+    }
   } catch (error) {
     console.error("Seller signup error:", error);
     res

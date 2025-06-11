@@ -12,6 +12,12 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 require("dotenv").config();
 const { Op } = require("sequelize");
+const {
+  sendAccountUnsuspensionEmail,
+  sendAccountSuspensionEmail,
+  sendBuyerToSellerConversionEmail,
+  sendSellerVerificationApprovalEmail,
+} = require("../../../utils/EmailService");
 
 // Configure AWS S3
 const s3 = new AWS.S3({
@@ -165,6 +171,21 @@ exports.convertToSeller = async (req, res) => {
       message: "User successfully converted to seller. Awaiting approval.",
       data: userResponse,
     });
+
+    try {
+      await sendBuyerToSellerConversionEmail({
+        email: updatedUser.email,
+        first_name: updatedUser.first_name,
+        last_name: updatedUser.last_name,
+        company_name: updatedUser.company_name,
+        company_registration_number: updatedUser.company_registration_number,
+        country_of_registration: updatedUser.country_of_registration,
+        business_address: updatedUser.business_address,
+        website_url: updatedUser.website_url,
+      });
+    } catch (error) {
+      console.error("Error sending email:", error);
+    }
   } catch (error) {
     console.error("Convert to seller error:", error);
     res.status(500).json({
@@ -445,15 +466,6 @@ exports.suspendUser = async (req, res) => {
       });
     }
 
-    // Prevent admin from suspending themselves
-    if (req.user && req.user.id === userId) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "You cannot suspend your own account",
-      });
-    }
-
     // Update suspension status
     await user.update(
       {
@@ -474,6 +486,41 @@ exports.suspendUser = async (req, res) => {
       }`
     );
 
+    // Send email BEFORE sending response
+    let emailResult = null;
+
+    if (suspend) {
+      try {
+        console.log("Attempting to send suspension email to:", user.email);
+        emailResult = await sendAccountSuspensionEmail({
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          role: user.role,
+          reason: reason,
+        });
+        console.log("Suspension email result:", emailResult);
+      } catch (error) {
+        console.error("Error sending account suspension email:", error);
+        // Don't fail the entire operation if email fails
+      }
+    } else {
+      try {
+        console.log("Attempting to send unsuspension email to:", user.email);
+        emailResult = await sendAccountUnsuspensionEmail({
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          role: user.role,
+        });
+        console.log("Unsuspension email result:", emailResult);
+      } catch (error) {
+        console.error("Error sending account unsuspension email:", error);
+        // Don't fail the entire operation if email fails
+      }
+    }
+
+    // Send response with email status
     res.status(200).json({
       success: true,
       message: `User ${suspend ? "suspended" : "unsuspended"} successfully`,
@@ -484,6 +531,8 @@ exports.suspendUser = async (req, res) => {
         is_active: user.is_active,
         action: suspend ? "suspended" : "unsuspended",
         timestamp: new Date().toISOString(),
+        emailSent: emailResult?.success || false,
+        emailError: emailResult?.success === false ? emailResult.message : null,
       },
     });
   } catch (error) {
@@ -1231,6 +1280,24 @@ exports.updateUserVerification = async (req, res) => {
       message: `User ${verificationType} verification updated successfully`,
       data: updatedUser,
     });
+
+    if (verificationType === "seller") {
+      try {
+        await sendSellerVerificationApprovalEmail({
+          email: updatedUser.email,
+          first_name: updatedUser.first_name,
+          last_name: updatedUser.last_name,
+          company_name: updatedUser.company_name,
+          business_address: updatedUser.business_address,
+          website_url: updatedUser.website_url,
+        });
+      } catch (error) {
+        console.error(
+          "Error sending seller verification approval email:",
+          error
+        );
+      }
+    }
   } catch (error) {
     console.error("Update user verification error:", error);
     res.status(500).json({

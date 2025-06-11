@@ -11,7 +11,11 @@ const { sequelize } = require("../../../config/db");
 const Order = require("../../../models/order.model");
 const OrderItem = require("../../../models/orderItem");
 const { Cart, CartItem } = require("../../../models/cart.model");
-const { Product } = require("../../../models");
+const { Product, User } = require("../../../models");
+const {
+  sendOrderPlacementEmail,
+  sendPaymentSuccessfulEmail,
+} = require("../../../utils/EmailService");
 
 /**
  * Create a PaymentIntent for Stripe
@@ -49,6 +53,205 @@ exports.createPaymentIntent = async (req, res) => {
  * Create an order after successful payment
  * @route POST /api/checkout/create-order
  */
+// exports.createOrder = async (req, res) => {
+//   const t = await sequelize.transaction();
+
+//   try {
+//     const { items, shipping, payment } = req.body;
+//     const userId = req.params.userId;
+
+//     // First check if all products exist in the database before proceeding
+//     const productIds = items.map((item) => item.id);
+
+//     // Verify all products exist in the database
+//     const existingProducts = await Product.findAll({
+//       where: { id: productIds },
+//       attributes: ["id"],
+//       transaction: t,
+//     });
+
+//     const existingProductIds = existingProducts.map((product) => product.id);
+//     const missingProductIds = productIds.filter(
+//       (id) => !existingProductIds.includes(id)
+//     );
+
+//     if (missingProductIds.length > 0) {
+//       throw new Error(
+//         `Products with IDs ${missingProductIds.join(", ")} do not exist`
+//       );
+//     }
+
+//     // Calculate order totals using the provided items - FIXED CALCULATIONS
+//     const subtotal = parseFloat(
+//       items
+//         .reduce(
+//           (sum, item) => sum + parseFloat(item.price) * parseInt(item.quantity),
+//           0
+//         )
+//         .toFixed(2)
+//     );
+
+//     // Calculate retip total if any items have retipping service - FIXED
+//     const retipTotal = parseFloat(
+//       items
+//         .reduce((sum, item) => {
+//           const retipPrice = item.retipAdded
+//             ? parseFloat(item.retipPrice || 0)
+//             : 0;
+//           const quantity = parseInt(item.quantity);
+//           return sum + retipPrice * quantity;
+//         }, 0)
+//         .toFixed(2)
+//     );
+
+//     // FIXED: Proper decimal calculations
+//     const taxRate = 0.0109;
+//     const commissionRate = 0.05;
+
+//     const tax = parseFloat((subtotal * taxRate).toFixed(2));
+//     const platformFee = parseFloat((subtotal * commissionRate).toFixed(2));
+//     const shippingCost = 0.0; // Free shipping
+
+//     // FIXED: Final total calculation
+//     const total = parseFloat(
+//       (subtotal + tax + platformFee + shippingCost + retipTotal).toFixed(2)
+//     );
+
+//     console.log("Order totals:", {
+//       subtotal,
+//       retipTotal,
+//       tax,
+//       platformFee,
+//       total,
+//     });
+
+//     // Verify payment with Stripe if needed
+//     const paymentIntent = await stripe.paymentIntents.retrieve(payment.id);
+
+//     if (paymentIntent.status !== "succeeded") {
+//       throw new Error("Payment has not been completed");
+//     }
+
+//     // Create order record - FIXED: Ensure all numeric values are properly formatted
+//     const order = await Order.create(
+//       {
+//         id: uuidv4(),
+//         buyer_id: userId,
+//         total_amount: total, // Now properly calculated as a clean decimal
+//         shipping_cost: shippingCost,
+//         platform_fee: platformFee,
+//         payment_completed: true,
+//         shipping_address: shipping,
+//         requires_retipping: retipTotal > 0,
+//         order_date: new Date(),
+//       },
+//       { transaction: t }
+//     );
+
+//     // Create order items directly from the provided items - FIXED
+//     for (const item of items) {
+//       const itemPrice = parseFloat(item.price);
+//       const itemQuantity = parseInt(item.quantity);
+//       const itemRetipPrice = item.retipAdded
+//         ? parseFloat(item.retipPrice || 0)
+//         : 0;
+
+//       await OrderItem.create(
+//         {
+//           id: uuidv4(),
+//           order_id: order.id,
+//           product_id: item.id,
+//           quantity: itemQuantity,
+//           order_status: "pending approval",
+//           payment_status: true,
+//           price: itemPrice,
+//           title: item.title,
+//           retip_added: item.retipAdded || false,
+//           retip_price: itemRetipPrice,
+//         },
+//         { transaction: t }
+//       );
+//     }
+
+//     // Clear user's cart
+//     const cart = await Cart.findOne({ where: { user_id: userId } });
+//     if (cart) {
+//       await CartItem.destroy({ where: { cart_id: cart.id }, transaction: t });
+//       await cart.update(
+//         { products_count: 0, total_price: 0 },
+//         { transaction: t }
+//       );
+//     }
+
+//     await t.commit();
+
+//     res.status(201).json({
+//       success: true,
+//       orderId: order.id,
+//       message: "Order created successfully",
+//       itemsProcessed: items.length,
+//       orderTotal: total,
+//     });
+//     setImmediate(async () => {
+//       try {
+//         // Get user data for email
+//         const userData = await User.findByPk(userId, {
+//           attributes: ["email", "first_name", "last_name"],
+//         });
+
+//         // Send both emails concurrently
+//         const [orderPlacementEmailResult, paymentSuccessEmailResult] =
+//           await Promise.allSettled([
+//             sendOrderPlacementEmail(
+//               order.dataValues,
+//               userData.dataValues,
+//               items
+//             ),
+//             sendPaymentSuccessfulEmail(
+//               order.dataValues,
+//               userData.dataValues,
+//               paymentIntent,
+//               items
+//             ),
+//           ]);
+
+//         // Log results (optional)
+//         if (
+//           orderPlacementEmailResult.status === "rejected" ||
+//           !orderPlacementEmailResult.value?.success
+//         ) {
+//           console.error(
+//             "Failed to send order placement email:",
+//             orderPlacementEmailResult.reason ||
+//               orderPlacementEmailResult.value?.message
+//           );
+//         }
+
+//         if (
+//           paymentSuccessEmailResult.status === "rejected" ||
+//           !paymentSuccessEmailResult.value?.success
+//         ) {
+//           console.error(
+//             "Failed to send payment success email:",
+//             paymentSuccessEmailResult.reason ||
+//               paymentSuccessEmailResult.value?.message
+//           );
+//         }
+
+//         console.log("Order emails processed for order ID:", order.id);
+//       } catch (emailError) {
+//         console.error("Error processing order emails:", emailError);
+//         // Optionally, you could add this to a retry queue here
+//       }
+//     });
+//   } catch (error) {
+//     await t.rollback();
+//     console.error("Error creating order:", error);
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+// Add these imports at the top of your controller file
+
 exports.createOrder = async (req, res) => {
   const t = await sequelize.transaction();
 
@@ -59,10 +262,10 @@ exports.createOrder = async (req, res) => {
     // First check if all products exist in the database before proceeding
     const productIds = items.map((item) => item.id);
 
-    // Verify all products exist in the database
+    // Verify all products exist in the database AND fetch their images
     const existingProducts = await Product.findAll({
       where: { id: productIds },
-      attributes: ["id"],
+      attributes: ["id", "images"], // Include images attribute like in confirmOrder
       transaction: t,
     });
 
@@ -76,6 +279,13 @@ exports.createOrder = async (req, res) => {
         `Products with IDs ${missingProductIds.join(", ")} do not exist`
       );
     }
+
+    // Create a map of product IDs to their images for easy lookup
+    const productImagesMap = {};
+    existingProducts.forEach((product) => {
+      productImagesMap[product.id] =
+        product.images && product.images.length > 0 ? product.images[0] : null;
+    });
 
     // Calculate order totals using the provided items - FIXED CALCULATIONS
     const subtotal = parseFloat(
@@ -101,11 +311,9 @@ exports.createOrder = async (req, res) => {
     );
 
     // FIXED: Proper decimal calculations
-    const taxRate = 0.0109;
-    const commissionRate = 0.05;
 
-    const tax = parseFloat((subtotal * taxRate).toFixed(2));
-    const platformFee = parseFloat((subtotal * commissionRate).toFixed(2));
+    const tax = parseFloat(payment.tax.toFixed(2));
+    const platformFee = parseFloat(payment.commissionFee.toFixed(2));
     const shippingCost = 0.0; // Free shipping
 
     // FIXED: Final total calculation
@@ -181,6 +389,7 @@ exports.createOrder = async (req, res) => {
 
     await t.commit();
 
+    // Send response immediately
     res.status(201).json({
       success: true,
       orderId: order.id,
@@ -188,13 +397,110 @@ exports.createOrder = async (req, res) => {
       itemsProcessed: items.length,
       orderTotal: total,
     });
+
+    // Send emails asynchronously after response (fire and forget)
+    setImmediate(async () => {
+      try {
+        // Get user data for email
+        const userData = await User.findByPk(userId, {
+          attributes: ["email", "first_name", "last_name"],
+        });
+
+        if (!userData) {
+          console.error("User not found for email sending:", userId);
+          return;
+        }
+
+        // Prepare items with proper structure for email functions (including product images)
+        const emailItems = items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          quantity: item.quantity,
+          retipAdded: item.retipAdded || false,
+          retipPrice: item.retipPrice || 0,
+          product_image: productImagesMap[item.id] || null, // Get the first image from the map
+        }));
+
+        // Prepare order data with proper structure
+        const orderDataForEmail = {
+          id: order.id,
+          total_amount: total,
+          shipping_address: shipping,
+          platform_fee: platformFee,
+          shipping_cost: shippingCost,
+          requires_retipping: retipTotal > 0,
+          tax: tax,
+        };
+
+        // Prepare user data with proper structure
+        const userDataForEmail = {
+          email: userData.email,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+        };
+
+        // Send both emails concurrently
+        const [orderPlacementEmailResult, paymentSuccessEmailResult] =
+          await Promise.allSettled([
+            sendOrderPlacementEmail(
+              orderDataForEmail,
+              userDataForEmail,
+              emailItems
+            ),
+            sendPaymentSuccessfulEmail(
+              orderDataForEmail,
+              userDataForEmail,
+              paymentIntent,
+              emailItems
+            ),
+          ]);
+
+        // Log results (optional)
+        if (
+          orderPlacementEmailResult.status === "rejected" ||
+          !orderPlacementEmailResult.value?.success
+        ) {
+          console.error(
+            "Failed to send order placement email:",
+            orderPlacementEmailResult.reason ||
+              orderPlacementEmailResult.value?.message
+          );
+        } else {
+          console.log(
+            "Order placement email sent successfully for order:",
+            order.id
+          );
+        }
+
+        if (
+          paymentSuccessEmailResult.status === "rejected" ||
+          !paymentSuccessEmailResult.value?.success
+        ) {
+          console.error(
+            "Failed to send payment success email:",
+            paymentSuccessEmailResult.reason ||
+              paymentSuccessEmailResult.value?.message
+          );
+        } else {
+          console.log(
+            "Payment success email sent successfully for order:",
+            order.id
+          );
+        }
+
+        console.log("Order emails processed for order ID:", order.id);
+      } catch (emailError) {
+        console.error("Error processing order emails:", emailError);
+        // Optionally, you could add this to a retry queue here
+      }
+    });
   } catch (error) {
     await t.rollback();
     console.error("Error creating order:", error);
     res.status(500).json({ error: error.message });
   }
 };
-
 /**
  * Get user's order history
  * @route GET /api/checkout/orders
