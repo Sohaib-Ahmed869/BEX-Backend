@@ -892,44 +892,103 @@ exports.updateProduct = async (req, res) => {
  */
 exports.getFeaturedProducts = async (req, res) => {
   try {
-    const featuredProducts = await Product.findAll({
-      where: {
-        is_featured: true,
-        is_active: true,
-        expiration_date: {
-          [Op.gt]: new Date(),
-        },
-      },
-      include: [
-        {
-          model: ProductRetippingDetails,
-          as: "retipping_details",
-          attributes: [
-            "diameter",
-            "enable_diy",
-            "per_segment_price",
-            "segments",
-            "total_price",
-          ],
-        },
-      ],
-      limit: 10,
-      order: [["created_at", "DESC"]],
+    // First, check if the association exists
+    const isAssociationDefined =
+      Product.associations && Product.associations.retippingDetails;
+
+    let products;
+
+    // Base where condition to get only featured products
+    const whereCondition = {
+      is_Archived: false,
+      is_flagged: false,
+      is_active: true,
+      list_for_selling: true,
+      is_featured: true, // Only get featured products
+    };
+
+    if (isAssociationDefined) {
+      // If association exists, include the retipping details and user information
+      products = await Product.findAll({
+        where: whereCondition,
+        include: [
+          {
+            model: ProductRetippingDetails,
+            as: "retipping_details",
+            attributes: [
+              "diameter",
+              "enable_diy",
+              "per_segment_price",
+              "segments",
+              "total_price",
+            ],
+            required: false, // LEFT JOIN - include products even without retipping details
+          },
+          {
+            model: User,
+            as: "seller", // Using the correct alias from your association
+            attributes: ["seller_approval_status"],
+            required: false, // LEFT JOIN - include products even if user info is missing
+          },
+        ],
+        order: [["created_at", "DESC"]],
+      });
+    } else {
+      // If association doesn't exist, fetch products with user information
+      products = await Product.findAll({
+        where: whereCondition,
+        include: [
+          {
+            model: User,
+            as: "seller", // Using the correct alias from your association
+            attributes: ["seller_approval_status"],
+            required: false, // LEFT JOIN - include products even if user info is missing
+          },
+        ],
+        order: [["created_at", "DESC"]],
+      });
+    }
+
+    // Transform the products to include is_verified field
+    const transformedProducts = products.map((product) => {
+      const productData = product.toJSON();
+
+      // Check if the seller is approved
+      const isVerified =
+        productData.seller &&
+        productData.seller.seller_approval_status === "approved";
+
+      // Add is_verified field and remove the seller data from the response
+      const { seller, ...productWithoutSeller } = productData;
+
+      return {
+        ...productWithoutSeller,
+        is_verified: isVerified,
+      };
     });
+
+    // Log the unique user_ids for debugging
+    const uniqueUserIds = [
+      ...new Set(products.map((product) => product.user_id)),
+    ];
+    console.log(
+      `Found ${products.length} featured products from ${uniqueUserIds.length} unique sellers`
+    );
 
     return res.status(200).json({
       success: true,
-      count: featuredProducts.length,
-      data: featuredProducts,
+      data: transformedProducts,
+      totalCount: transformedProducts.length,
+      message: "Featured products retrieved successfully",
     });
   } catch (error) {
-    return res.status(400).json({
+    console.error("Error fetching featured products:", error);
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
-
 /**
  * Search products with various filters
  */

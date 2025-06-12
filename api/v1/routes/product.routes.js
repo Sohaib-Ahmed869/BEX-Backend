@@ -23,6 +23,7 @@ const upload = multer({
 });
 
 router.get("/", getAllProducts);
+router.get("/getFeaturedProducts", getFeaturedProducts);
 router.get("/getAllProducts", getProducts);
 router.get("/getproductbyId/:productId", getProductById);
 
