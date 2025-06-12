@@ -19,6 +19,7 @@ const OrderDispute = require("./orderdisputes.model");
 const { Chat } = require("./chat.model");
 const { Message } = require("./message.model");
 const { FlaggedProducts } = require("./flagged-products.model");
+const UserPermissions = require("./userPermissions.model");
 
 // Order - OrderItem associations
 Order.hasMany(OrderItem, {
@@ -235,6 +236,13 @@ FlaggedProducts.belongsTo(User, {
 FlaggedProducts.belongsTo(User, {
   foreignKey: "resolved_by",
   as: "resolver",
+});
+// user permissions
+User.hasOne(UserPermissions, {
+  foreignKey: "user_id",
+  as: "permissions",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
 });
 module.exports = {
   User,

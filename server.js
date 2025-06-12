@@ -26,6 +26,7 @@ const shipstationRoutes = require("./api/v1/routes/shipment.routes");
 const OrderAnalyticsRoutes = require("./api/v1/routes/orderAnalytics.routes");
 const { setupChatSocket } = require("./api/v1/socket/chatSocket");
 const ChatRoutes = require("./api/v1/routes/chat.routes");
+const UserPermissionRoutes = require("./api/v1/routes/userPermissions.routes");
 const http = require("http");
 const socketIo = require("socket.io");
 
@@ -83,6 +84,7 @@ app.use("/api/orderdispute", OrderDisputeRoutes);
 app.use("/api/admin/dashboard", AdminDashboardRoutes);
 app.use("/api/admin/flagproduct", ProductFlaggingRoutes);
 app.use("/api/admin/commission", CategoryCommissionRoutes);
+app.use("/api/admin/userpermission", UserPermissionRoutes);
 app.use("/api/chat", ChatRoutes);
 app.use("/api/shipstation", shipstationRoutes);
 app.use(

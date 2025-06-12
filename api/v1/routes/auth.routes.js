@@ -5,6 +5,7 @@ const {
   login,
   RegisterBuyer,
   RegisterSeller,
+  RegisterAdmin,
 } = require("../controllers/auth.controller");
 require("dotenv").config();
 
@@ -20,5 +21,6 @@ const upload = multer({
 router.post("/login", login);
 router.post("/register-buyer", RegisterBuyer);
 router.post("/register-seller", upload.single("licenseImage"), RegisterSeller);
+router.post("/register-admin", RegisterAdmin);
 
 module.exports = router;

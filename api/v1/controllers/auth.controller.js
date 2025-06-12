@@ -8,6 +8,7 @@ const {
   sendBuyerRegistrationEmail,
   sendSellerRegistrationEmail,
 } = require("../../../utils/EmailService");
+const UserPermissions = require("../../../models/userPermissions.model");
 require("dotenv").config();
 
 // Configure AWS S3
@@ -213,6 +214,80 @@ const RegisterSeller = async (req, res) => {
       .json({ message: "Error creating seller account", error: error.message });
   }
 };
+const RegisterAdmin = async (req, res) => {
+  try {
+    const { email, password, first_name, last_name, phone } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ message: "User with this email already exists" });
+    }
+
+    // Create a new admin user
+    const newAdmin = await User.create({
+      email,
+      password_hash: password, // Model hooks will hash this
+      first_name: first_name || "",
+      last_name: last_name || "",
+      phone: phone || null,
+      role: "admin",
+    });
+
+    // Define default permissions for non-root admin
+    const defaultPermissions = {
+      user_id: newAdmin.id,
+      dashboard: true,
+      users: false, // Limited access to user management
+      orders: true,
+      product_list: true,
+      commission: false, // No commission access by default
+      disputes: true,
+      settings: false, // No settings access by default
+      can_manage_permissions: false, // Cannot manage other admin permissions
+      is_root_admin: false, // Not a root admin
+    };
+    // Create permissions record
+    await UserPermissions.create(defaultPermissions);
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: newAdmin.id, email: newAdmin.email, role: newAdmin.role },
+      process.env.JWT_SECRET || "bex-jwt-secret-change-this",
+      { expiresIn: "8h" }
+    );
+
+    res.status(201).json({
+      message: "Admin registered successfully",
+      token,
+      user: {
+        id: newAdmin.id,
+        email: newAdmin.email,
+        first_name: newAdmin.first_name,
+        last_name: newAdmin.last_name,
+        role: newAdmin.role,
+      },
+      permissions: {
+        dashboard: defaultPermissions.dashboard,
+        users: defaultPermissions.users,
+        orders: defaultPermissions.orders,
+        product_list: defaultPermissions.product_list,
+        commission: defaultPermissions.commission,
+        disputes: defaultPermissions.disputes,
+        settings: defaultPermissions.settings,
+        can_manage_permissions: defaultPermissions.can_manage_permissions,
+        is_root_admin: defaultPermissions.is_root_admin,
+      },
+    });
+  } catch (error) {
+    console.error("Admin signup error:", error);
+    res
+      .status(500)
+      .json({ message: "Error creating admin account", error: error.message });
+  }
+};
 
 // Login Function
 const login = async (req, res) => {
@@ -264,8 +339,10 @@ const login = async (req, res) => {
       .json({ message: "Error during login", error: error.message });
   }
 };
+
 module.exports = {
   RegisterBuyer,
   RegisterSeller,
   login,
+  RegisterAdmin,
 };

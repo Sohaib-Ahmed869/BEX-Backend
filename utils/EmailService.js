@@ -621,10 +621,7 @@ const sendOrderConfirmationEmail = async (orderData, userData) => {
       </div>
       
       <div class="button-container">
-        <a href="${process.env.CLIENT_URL}/orders/${orderId.slice(
-      0,
-      8
-    )}" class="button">Track Your Order</a>
+        <a href="${process.env.CLIENT_URL}/" class="button">Track Your Order</a>
       </div>
       
       <p>You will receive updates about your order status via email. If you have any questions, please don't hesitate to contact our support team.</p>
@@ -747,13 +744,10 @@ const sendOrderRejectionEmail = async (orderData, userData) => {
       </div>
       
       <div class="button-container">
-        <a href="${process.env.CLIENT_URL}/orders/${orderId.slice(
-      0,
-      8
-    )}" class="button">View Order Details</a>
         <a href="${
           process.env.CLIENT_URL
-        }/products" class="button">Browse Products</a>
+        }/" class="button">View Order Details</a>
+        <a href="${process.env.CLIENT_URL}/" class="button">Browse Products</a>
       </div>
       
       <p>We apologize for any inconvenience caused. Our team is here to help you find the products you need.</p>
@@ -811,10 +805,10 @@ const sendBuyerRegistrationEmail = async (userData) => {
       <div class="button-container">
         <a href="${
           process.env.CLIENT_URL
-        }/products" class="button button-success">Start Shopping</a>
+        }/" class="button button-success">Start Shopping</a>
         <a href="${
           process.env.CLIENT_URL
-        }/profile" class="button">Complete Your Profile</a>
+        }/" class="button">Complete Your Profile</a>
       </div>
       
       <div class="info-box">
@@ -890,7 +884,7 @@ const sendSellerRegistrationEmail = async (userData) => {
       <div class="button-container">
         <a href="${
           process.env.CLIENT_URL
-        }/seller/dashboard" class="button">Check Application Status</a>
+        }/" class="button">Check Application Status</a>
       </div>
       
       <div class="info-box">
@@ -984,13 +978,9 @@ const sendAccountSuspensionEmail = async (userData) => {
         </ul>
       </div>
       
-      <div class="button-container">
-        <a href="${
-          process.env.CLIENT_URL
-        }/support" class="button button-danger">Contact Support</a>
-       
-      </div>
+      <p>Thank you for your understanding.</p>
       
+      <p>Best regards,<br>The BEX Marketplace Team</p>
       <p>We take account security and community guidelines seriously. If you have any questions about this suspension, please contact our support team.</p>
       
       <p>Best regards,<br>BEX Marketplace Administration Team</p>
@@ -1073,7 +1063,7 @@ const sendAccountUnsuspensionEmail = async (userData) => {
       <div class="button-container">
         <a href="${
           process.env.CLIENT_URL
-        }/${role}/dashboard" class="button button-success">Access Your Dashboard</a>
+        }/" class="button button-success">Access Your Dashboard</a>
        
       </div>
       
@@ -1267,10 +1257,7 @@ const sendOrderPlacementEmail = async (orderData, userData, items) => {
       </div>
       
       <div class="button-container">
-        <a href="${process.env.CLIENT_URL}/orders/${orderId.slice(
-      0,
-      8
-    )}" class="button">Track Your Order</a>
+        <a href="${process.env.CLIENT_URL}/" class="button">Track Your Order</a>
         
       </div>
       
@@ -1443,13 +1430,12 @@ const sendPaymentSuccessfulEmail = async (
       </div>
       
       <div class="button-container">
-        <a href="${process.env.CLIENT_URL}/orders/${orderId.slice(
-      0,
-      8
-    )}" class="button button-success">View Order Details</a>
         <a href="${
           process.env.CLIENT_URL
-        }/buyer/orders" class="button">All My Orders</a>
+        }/" class="button button-success">View Order Details</a>
+        <a href="${
+          process.env.CLIENT_URL
+        }/" class="button button-primary">Continue Shopping</a>
       </div>
       
       <p>Thank you for your payment! Your order is now in the system and being processed.</p>
@@ -1566,7 +1552,7 @@ const sendBuyerToSellerConversionEmail = async (userData) => {
       <div class="button-container">
         <a href="${
           process.env.CLIENT_URL
-        }/seller/dashboard" class="button button-success">Access Seller Dashboard</a>
+        }/" class="button button-success">Access Seller Dashboard</a>
         
       </div>
       
@@ -1677,7 +1663,7 @@ const sendSellerVerificationApprovalEmail = async (userData) => {
       <div class="button-container">
         <a href="${
           process.env.CLIENT_URL
-        }/seller/dashboard" class="button button-success">View Your Dashboard</a>
+        }/" class="button button-success">View Your Dashboard</a>
        
       </div>
       
