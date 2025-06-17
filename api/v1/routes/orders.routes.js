@@ -7,6 +7,8 @@ const {
   getAllOrders,
   getOrderItemsByOrderId,
   getBuyerOrders,
+  getSellerOrderItemsByOrderId,
+  getRecentOrderShippingDetails,
 } = require("../controllers/orders.controller");
 const router = express.Router();
 
@@ -18,7 +20,9 @@ router.put("/reject/:itemId", rejectOrder);
 
 // Parameterized routes LAST
 router.get("/:userId", getSellerOrders);
+router.get("/recent-shipping-address/:userId", getRecentOrderShippingDetails);
 router.get("/buyerOrders/:userId", getBuyerOrders);
 router.get("/:orderId/items", getOrderItemsByOrderId);
+router.get("/:orderId/sellers/:userId/items", getSellerOrderItemsByOrderId);
 
 module.exports = router;

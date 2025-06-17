@@ -197,6 +197,73 @@ exports.convertToSeller = async (req, res) => {
 };
 
 // Get all users (admin only) with pagination and filtering
+// exports.getAllUsers = async (req, res) => {
+//   try {
+//     const {
+//       page = 1,
+//       limit = 10,
+//       role,
+//       is_active,
+//       email_verified,
+//       seller_approval_status,
+//       search,
+//     } = req.query;
+//     console.log(search);
+//     const offset = (page - 1) * limit;
+//     const whereClause = {};
+
+//     // Apply filters
+//     if (role) whereClause.role = role;
+//     if (is_active !== undefined) whereClause.is_active = is_active === "true";
+//     if (email_verified !== undefined)
+//       whereClause.email_verified = email_verified === "true";
+//     if (seller_approval_status)
+//       whereClause.seller_approval_status = seller_approval_status;
+
+//     // Search functionality
+//     if (search) {
+//       whereClause[sequelize.Op.or] = [
+//         { first_name: { [sequelize.Op.iLike]: `%${search}%` } },
+//         { last_name: { [sequelize.Op.iLike]: `%${search}%` } },
+//         { email: { [sequelize.Op.iLike]: `%${search}%` } },
+//         { company_name: { [sequelize.Op.iLike]: `%${search}%` } },
+//       ];
+//     }
+
+//     const { count, rows: users } = await User.findAndCountAll({
+//       where: whereClause,
+//       attributes: { exclude: ["password_hash"] },
+//       limit: parseInt(limit),
+//       offset: parseInt(offset),
+//       order: [["created_at", "DESC"]],
+//     });
+
+//     const totalPages = Math.ceil(count / limit);
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Users fetched successfully",
+//       data: {
+//         users,
+//         pagination: {
+//           currentPage: parseInt(page),
+//           totalPages,
+//           totalUsers: count,
+//           hasNextPage: page < totalPages,
+//           hasPreviousPage: page > 1,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Get all users error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Error fetching users",
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.getAllUsers = async (req, res) => {
   try {
     const {
@@ -209,6 +276,7 @@ exports.getAllUsers = async (req, res) => {
       search,
     } = req.query;
 
+    console.log(search);
     const offset = (page - 1) * limit;
     const whereClause = {};
 
@@ -220,13 +288,17 @@ exports.getAllUsers = async (req, res) => {
     if (seller_approval_status)
       whereClause.seller_approval_status = seller_approval_status;
 
-    // Search functionality
+    // Search functionality - case insensitive, matches from start of username
     if (search) {
-      whereClause[sequelize.Op.or] = [
-        { first_name: { [sequelize.Op.iLike]: `%${search}%` } },
-        { last_name: { [sequelize.Op.iLike]: `%${search}%` } },
-        { email: { [sequelize.Op.iLike]: `%${search}%` } },
-        { company_name: { [sequelize.Op.iLike]: `%${search}%` } },
+      const searchTerm = search.trim();
+      whereClause[Op.or] = [
+        // Match from the beginning of first_name (case insensitive)
+        { first_name: { [Op.iLike]: `${searchTerm}%` } },
+        // Match from the beginning of last_name (case insensitive)
+        { last_name: { [Op.iLike]: `${searchTerm}%` } },
+        // You can also keep email and company_name search if needed
+        { email: { [Op.iLike]: `%${searchTerm}%` } },
+        { company_name: { [Op.iLike]: `%${searchTerm}%` } },
       ];
     }
 
@@ -263,7 +335,6 @@ exports.getAllUsers = async (req, res) => {
     });
   }
 };
-
 // Get sellers only (for buyer/admin to view verified sellers)
 exports.getSellers = async (req, res) => {
   try {

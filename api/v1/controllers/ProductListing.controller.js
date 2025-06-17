@@ -98,7 +98,60 @@ exports.addProductListing = async (req, res) => {
     });
   }
 };
+/**
+ * Update product listing name by listing ID
+ */
+exports.updateProductListingName = async (req, res) => {
+  const transaction = await sequelize.transaction();
 
+  try {
+    const listingId = req.params.listingId;
+    const { Product_Name } = req.body;
+
+    // Validate required fields
+    if (!Product_Name) {
+      throw new Error("Product_Name is required");
+    }
+
+    if (!listingId) {
+      throw new Error("Listing ID is required");
+    }
+
+    // Check if product listing exists
+    const existingListing = await ProductListing.findByPk(listingId);
+    if (!existingListing) {
+      throw new Error("Product listing not found");
+    }
+
+    // Update the product listing name
+    await ProductListing.update(
+      {
+        Product_Name: Product_Name,
+      },
+      {
+        where: { id: listingId },
+        transaction,
+      }
+    );
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: "Product listing name updated successfully",
+      data: {
+        id: listingId,
+        Product_Name: Product_Name,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 /**
  * Get all product listings
  */

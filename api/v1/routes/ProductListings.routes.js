@@ -9,6 +9,7 @@ const {
   deleteProductListing,
   getAllProductListings,
   getProductsByListingId,
+  updateProductListingName,
 } = require("../controllers/ProductListing.controller");
 
 // Configure multer for memory storage (needed for S3 uploading)
@@ -41,5 +42,5 @@ router.put(
 
 // Delete a product listing
 router.delete("/:productListingId", deleteProductListing);
-
+router.patch("/update/:listingId", updateProductListingName);
 module.exports = router;
