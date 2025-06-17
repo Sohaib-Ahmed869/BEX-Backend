@@ -46,7 +46,34 @@ exports.getDashboardStats = async (req, res) => {
         {
           model: OrderItem,
           as: "items",
-          where: { product_id: { [Op.in]: productIds } },
+          where: {
+            product_id: { [Op.in]: productIds },
+            order_status: "approved",
+          },
+          include: [
+            {
+              model: Product,
+              as: "product",
+              attributes: ["id", "title", "images", "quantity"],
+            },
+          ],
+        },
+      ],
+      where: {
+        order_date: {
+          [Op.between]: [defaultStartDate, defaultEndDate],
+        },
+      },
+      order: [["order_date", "DESC"]],
+    });
+    const orderItemsForRecentOrders = await Order.findAll({
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          where: {
+            product_id: { [Op.in]: productIds },
+          },
           include: [
             {
               model: Product,
@@ -78,21 +105,23 @@ exports.getDashboardStats = async (req, res) => {
     const averageOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
 
     // Get recent orders (last 10)
-    const recentOrders = ordersWithItems.slice(0, 10).map((order) => ({
-      id: order.id,
-      orderDate: order.order_date,
-      items: order.items.map((item) => ({
-        title: item.title,
-        quantity: item.quantity,
-        price: item.price,
-        order_status: item.order_status,
-        payment_status: item.payment_status,
-      })),
-      totalAmount: order.items.reduce(
-        (sum, item) => sum + parseFloat(item.price) * item.quantity,
-        0
-      ),
-    }));
+    const recentOrders = orderItemsForRecentOrders
+      .slice(0, 10)
+      .map((order) => ({
+        id: order.id,
+        orderDate: order.order_date,
+        items: order.items.map((item) => ({
+          title: item.title,
+          quantity: item.quantity,
+          price: item.price,
+          order_status: item.order_status,
+          payment_status: item.payment_status,
+        })),
+        totalAmount: order.items.reduce(
+          (sum, item) => sum + parseFloat(item.price) * item.quantity,
+          0
+        ),
+      }));
 
     // Calculate top selling products
     const productSales = {};
@@ -204,7 +233,7 @@ exports.getInventoryDetails = async (req, res) => {
           attributes: [], // Don't select order attributes to avoid GROUP BY issues
         },
       ],
-      where: { product_id: productId },
+      where: { product_id: productId, order_status: "approved" },
       attributes: [
         [sequelize.fn("DATE", sequelize.col("order.order_date")), "date"],
         [sequelize.fn("SUM", sequelize.col("OrderItem.quantity")), "totalSold"],
@@ -230,6 +259,7 @@ exports.getInventoryDetails = async (req, res) => {
                 { [Op.gte]: productCreatedAt }, // After product creation
                 { [Op.lt]: actualStartDate }, // Before our start date
               ],
+              order_status: "approved", // Added this filter for approved status
             },
           },
           attributes: [],
@@ -283,7 +313,7 @@ exports.getInventoryDetails = async (req, res) => {
           attributes: [],
         },
       ],
-      where: { product_id: productId },
+      where: { product_id: productId, order_status: "approved" },
       attributes: [
         [sequelize.fn("SUM", sequelize.col("OrderItem.quantity")), "totalSold"],
       ],
@@ -334,7 +364,10 @@ async function generateWeeklySalesData(productIds, startDate, endDate) {
           attributes: ["order_date"],
         },
       ],
-      where: { product_id: { [Op.in]: productIds } },
+      where: {
+        product_id: { [Op.in]: productIds },
+        order_status: "approved",
+      },
       attributes: ["price", "quantity"],
     });
 
