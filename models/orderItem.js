@@ -64,7 +64,10 @@ const OrderItem = sequelize.define(
       defaultValue: "pending approval",
       allowNull: false,
     },
-
+    seller_paid: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     payment_status: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

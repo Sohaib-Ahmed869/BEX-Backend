@@ -32,6 +32,22 @@ const UserPermissions = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    rejected_orders: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
+    refunded_orders: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
+    seller_payouts: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
+    shipped_orders: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
     product_list: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,

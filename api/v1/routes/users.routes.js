@@ -7,6 +7,7 @@ const {
   getUserInsights,
   updateUserVerification,
   suspendUser,
+  getSellers,
 } = require("../controllers/user.controller");
 
 const router = express.Router();
@@ -21,8 +22,9 @@ const upload = multer({
 });
 
 // Get user by ID
-router.get("/:userId", getUserById);
+router.get("/sellers", getSellers);
 router.get("/", getAllUsers);
+router.get("/:userId", getUserById);
 router.get("/user-insights/:userId", getUserInsights);
 router.patch("/:userId/suspend", suspendUser);
 

@@ -18,8 +18,10 @@ const { ProductListing } = require("./ProductListing.model");
 const OrderDispute = require("./orderdisputes.model");
 const { Chat } = require("./chat.model");
 const { Message } = require("./message.model");
+const Refund = require("./refund.model");
 const { FlaggedProducts } = require("./flagged-products.model");
 const UserPermissions = require("./userPermissions.model");
+const Payout = require("./stripePayout.model"); // Add this import
 
 // Order - OrderItem associations
 Order.hasMany(OrderItem, {
@@ -244,8 +246,62 @@ User.hasOne(UserPermissions, {
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
 });
+
+// Refund associations
+Order.hasMany(Refund, {
+  foreignKey: "order_id",
+  as: "refunds",
+});
+
+Refund.belongsTo(Order, {
+  foreignKey: "order_id",
+  as: "order",
+});
+
+OrderItem.hasMany(Refund, {
+  foreignKey: "order_item_id",
+  as: "refunds",
+});
+
+Refund.belongsTo(OrderItem, {
+  foreignKey: "order_item_id",
+  as: "orderItem",
+});
+
+// User association for who initiated the refund
+User.hasMany(Refund, {
+  foreignKey: "initiated_by",
+  as: "initiatedRefunds",
+});
+
+Refund.belongsTo(User, {
+  foreignKey: "initiated_by",
+  as: "initiator",
+});
+// Payout association
+User.hasMany(Payout, {
+  foreignKey: "seller_id",
+  as: "payouts", // Payouts received by the seller
+});
+
+Payout.belongsTo(User, {
+  foreignKey: "seller_id",
+  as: "seller",
+});
+
+// User - Payout associations (Initiated by relationship)
+User.hasMany(Payout, {
+  foreignKey: "initiated_by",
+  as: "initiatedPayouts", // Payouts initiated by admin/user
+});
+
+Payout.belongsTo(User, {
+  foreignKey: "initiated_by",
+  as: "initiator",
+});
 module.exports = {
   User,
+  Refund,
   Company,
   ProductType,
   Cart,

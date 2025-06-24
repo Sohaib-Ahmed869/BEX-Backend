@@ -27,6 +27,9 @@ const OrderAnalyticsRoutes = require("./api/v1/routes/orderAnalytics.routes");
 const { setupChatSocket } = require("./api/v1/socket/chatSocket");
 const ChatRoutes = require("./api/v1/routes/chat.routes");
 const UserPermissionRoutes = require("./api/v1/routes/userPermissions.routes");
+const RefundRoutes = require("./api/v1/routes/refund.routes");
+const StripeConnectRoutes = require("./api/v1/routes/stripeConnect.routes");
+const PayoutStatsRoutes = require("./api/v1/routes/PayoutStats.routes");
 const http = require("http");
 const socketIo = require("socket.io");
 
@@ -85,6 +88,9 @@ app.use("/api/admin/dashboard", AdminDashboardRoutes);
 app.use("/api/admin/flagproduct", ProductFlaggingRoutes);
 app.use("/api/admin/commission", CategoryCommissionRoutes);
 app.use("/api/admin/userpermission", UserPermissionRoutes);
+app.use("/api/admin/refund", RefundRoutes);
+app.use("/api/stripe-connect", StripeConnectRoutes);
+app.use("/api/admin/payoutStats", PayoutStatsRoutes);
 app.use("/api/chat", ChatRoutes);
 app.use("/api/shipstation", shipstationRoutes);
 app.use(

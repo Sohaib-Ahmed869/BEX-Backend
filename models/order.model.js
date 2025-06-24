@@ -65,6 +65,10 @@ const Order = sequelize.define(
       defaultValue: DataTypes.NOW,
       allowNull: false,
     },
+    payment_intent_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     timestamps: true,

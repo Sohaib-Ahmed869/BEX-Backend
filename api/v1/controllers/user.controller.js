@@ -196,74 +196,6 @@ exports.convertToSeller = async (req, res) => {
   }
 };
 
-// Get all users (admin only) with pagination and filtering
-// exports.getAllUsers = async (req, res) => {
-//   try {
-//     const {
-//       page = 1,
-//       limit = 10,
-//       role,
-//       is_active,
-//       email_verified,
-//       seller_approval_status,
-//       search,
-//     } = req.query;
-//     console.log(search);
-//     const offset = (page - 1) * limit;
-//     const whereClause = {};
-
-//     // Apply filters
-//     if (role) whereClause.role = role;
-//     if (is_active !== undefined) whereClause.is_active = is_active === "true";
-//     if (email_verified !== undefined)
-//       whereClause.email_verified = email_verified === "true";
-//     if (seller_approval_status)
-//       whereClause.seller_approval_status = seller_approval_status;
-
-//     // Search functionality
-//     if (search) {
-//       whereClause[sequelize.Op.or] = [
-//         { first_name: { [sequelize.Op.iLike]: `%${search}%` } },
-//         { last_name: { [sequelize.Op.iLike]: `%${search}%` } },
-//         { email: { [sequelize.Op.iLike]: `%${search}%` } },
-//         { company_name: { [sequelize.Op.iLike]: `%${search}%` } },
-//       ];
-//     }
-
-//     const { count, rows: users } = await User.findAndCountAll({
-//       where: whereClause,
-//       attributes: { exclude: ["password_hash"] },
-//       limit: parseInt(limit),
-//       offset: parseInt(offset),
-//       order: [["created_at", "DESC"]],
-//     });
-
-//     const totalPages = Math.ceil(count / limit);
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Users fetched successfully",
-//       data: {
-//         users,
-//         pagination: {
-//           currentPage: parseInt(page),
-//           totalPages,
-//           totalUsers: count,
-//           hasNextPage: page < totalPages,
-//           hasPreviousPage: page > 1,
-//         },
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Get all users error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Error fetching users",
-//       error: error.message,
-//     });
-//   }
-// };
-
 exports.getAllUsers = async (req, res) => {
   try {
     const {
@@ -338,14 +270,8 @@ exports.getAllUsers = async (req, res) => {
 // Get sellers only (for buyer/admin to view verified sellers)
 exports.getSellers = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      verified_only = "false",
-      approval_status = "approved",
-    } = req.query;
+    const { verified_only = "false" } = req.query;
 
-    const offset = (page - 1) * limit;
     const whereClause = {
       role: "seller",
       is_active: true,
@@ -355,35 +281,19 @@ exports.getSellers = async (req, res) => {
       whereClause.seller_verified = true;
     }
 
-    if (approval_status) {
-      whereClause.seller_approval_status = approval_status;
-    }
-
-    const { count, rows: sellers } = await User.findAndCountAll({
+    const sellers = await User.findAll({
       where: whereClause,
-      attributes: {
-        exclude: ["password_hash", "license_image_path"], // Exclude sensitive data
-      },
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [["created_at", "DESC"]],
+      attributes: ["id", "first_name", "last_name", "email", "company_name"],
+      order: [
+        ["first_name", "ASC"],
+        ["last_name", "ASC"],
+      ],
     });
-
-    const totalPages = Math.ceil(count / limit);
 
     res.status(200).json({
       success: true,
       message: "Sellers fetched successfully",
-      data: {
-        sellers,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages,
-          totalSellers: count,
-          hasNextPage: page < totalPages,
-          hasPreviousPage: page > 1,
-        },
-      },
+      sellers,
     });
   } catch (error) {
     console.error("Get sellers error:", error);
@@ -394,7 +304,6 @@ exports.getSellers = async (req, res) => {
     });
   }
 };
-
 // Get user statistics (admin only)
 exports.getUserStats = async (req, res) => {
   try {

@@ -54,15 +54,15 @@ exports.authenticate = async (req, res, next) => {
 
     // Verify that the user ID in the route params matches the token's user ID
     // This prevents users from accessing other users' carts
-    const userIdParam = req.params.userId;
+    // const userIdParam = req.params.userId;
 
-    if (userIdParam && userIdParam !== decoded.id) {
-      // Fix: Use 'id' instead of 'userId'
-      return res.status(403).json({
-        success: false,
-        message: "Forbidden. You cannot access another user's resources.",
-      });
-    }
+    // if (userIdParam && userIdParam !== decoded.id) {
+    //   // Fix: Use 'id' instead of 'userId'
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: "Forbidden. You cannot access another user's resources.",
+    //   });
+    // }
 
     next();
   } catch (error) {
