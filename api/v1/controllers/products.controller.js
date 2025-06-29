@@ -372,6 +372,8 @@ exports.getAllProducts = async (req, res) => {
     const whereCondition = {
       is_Archived: false,
       list_for_selling: true,
+      is_active: true,
+      is_flagged: false,
 
       // Only fetch non-archived products
     };
@@ -846,6 +848,7 @@ exports.updateProduct = async (req, res) => {
       {
         is_Archived: true,
         is_active: false, // Also set to inactive for good measure
+        list_for_selling: false,
       },
       { transaction }
     );

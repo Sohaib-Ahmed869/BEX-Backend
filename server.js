@@ -32,6 +32,9 @@ const StripeConnectRoutes = require("./api/v1/routes/stripeConnect.routes");
 const PayoutStatsRoutes = require("./api/v1/routes/PayoutStats.routes");
 const http = require("http");
 const socketIo = require("socket.io");
+const {
+  startProductExpirationCronJob,
+} = require("./jobs/ProductExpirationCronJob");
 
 const app = express();
 const server = http.createServer(app);
@@ -108,6 +111,7 @@ app.use("/api/googleauth", googleAuthRoutes);
 app.get("/", (req, res) => {
   res.send("BEX API is running");
 });
+startProductExpirationCronJob();
 
 // Sync database and start server
 async function startServer() {

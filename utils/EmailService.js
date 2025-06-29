@@ -1714,7 +1714,451 @@ const sendSellerVerificationApprovalEmail = async (userData) => {
     };
   }
 };
+const sendRefundProcessedEmail = async (
+  refundData,
+  orderData,
+  userData,
+  orderItemData
+) => {
+  try {
+    const {
+      id: refundId,
+      stripe_refund_id,
+      refund_amount,
+      item_price,
+      item_quantity,
+      reason,
+      processed_date,
+      notes,
+      retip_refund_amount,
+    } = refundData;
 
+    const {
+      id: orderId,
+      total_amount,
+      order_date,
+      payment_intent_id,
+    } = orderData;
+
+    const { email, first_name, last_name } = userData;
+    const { title: itemTitle } = orderItemData;
+
+    const subject = `Refund Processed - Order #${orderId.slice(0, 8)}`;
+
+    // Calculate refund breakdown
+    const itemRefundAmount =
+      Number.parseFloat(item_price) * Number.parseInt(item_quantity);
+    const retipAmount = Number.parseFloat(retip_refund_amount || 0);
+    const totalRefundAmount = Number.parseFloat(refund_amount);
+
+    // Format dates
+    const orderDateFormatted = new Date(order_date).toLocaleDateString(
+      "en-US",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }
+    );
+
+    const refundDateFormatted = new Date(processed_date).toLocaleDateString(
+      "en-US",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
+
+    // Get reason display text
+    const reasonDisplay =
+      {
+        seller_rejected: "Seller Rejected Order Item",
+        out_of_stock: "Item Out of Stock",
+        damaged_product: "Product Damaged",
+        customer_request: "Customer Request",
+        admin_decision: "Administrative Decision",
+        quality_issue: "Quality Issue",
+        other: "Other Reason",
+      }[reason] || reason;
+
+    const body = `
+      <h2>Refund Processed, ${first_name}!</h2>
+      
+      <div class="success-box">
+        <p><strong>Your refund has been successfully processed!</strong></p>
+        <p>A refund of $${totalRefundAmount.toFixed(
+          2
+        )} has been issued for your order item.</p>
+      </div>
+      
+      <div class="info-box">
+        <h3>Refund Details</h3>
+        <p><strong>Refund ID:</strong> ${refundId}</p>
+        <p><strong>Stripe Refund ID:</strong> ${stripe_refund_id}</p>
+        <p><strong>Order ID:</strong> #${orderId.slice(0, 8)}</p>
+        <p><strong>Original Order Date:</strong> ${orderDateFormatted}</p>
+        <p><strong>Refund Processed Date:</strong> ${refundDateFormatted}</p>
+        <p><strong>Refund Status:</strong> <span class="status-badge status-confirmed">Completed</span></p>
+      </div>
+      
+      <div class="order-details">
+        <h3>Refunded Item</h3>
+        <div class="order-item">
+          <div class="product-image">
+            <img src="https://via.placeholder.com/120x120?text=Refunded+Item" 
+                 alt="${itemTitle}" 
+                 onerror="this.src='https://via.placeholder.com/120x120?text=Refunded+Item'">
+          </div>
+          <div class="product-details">
+            <h4>${itemTitle}</h4>
+            <p><strong>Quantity Refunded:</strong> ${item_quantity}</p>
+            <p><strong>Unit Price:</strong> <span class="product-price">$${Number.parseFloat(
+              item_price
+            ).toFixed(2)}</span></p>
+            <p><strong>Reason:</strong> ${reasonDisplay}</p>
+            ${notes ? `<p><strong>Additional Notes:</strong> ${notes}</p>` : ""}
+          </div>
+        </div>
+      </div>
+      
+      <div class="info-box">
+        <h3>Refund Breakdown</h3>
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span><strong>Item Refund:</strong></span>
+            <span>$${itemRefundAmount.toFixed(2)}</span>
+          </div>
+          
+          ${
+            retipAmount > 0
+              ? `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            <span><strong>Retipping Service Refund:</strong></span>
+            <span>$${retipAmount.toFixed(2)}</span>
+          </div>
+          `
+              : ""
+          }
+          
+          <div style="display: flex; justify-content: space-between; padding-top: 15px; border-top: 2px solid #28a745; font-size: 18px; font-weight: bold;">
+            <span><strong>Total Refund Amount:</strong></span>
+            <span style="color: #28a745;">$${totalRefundAmount.toFixed(
+              2
+            )}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="info-box">
+        <h3>Refund Processing Information</h3>
+        <p><strong>Payment Method:</strong> Original payment method (Card ending in ${payment_intent_id.slice(
+          -4
+        )})</p>
+        <p><strong>Processing Time:</strong> 3-5 business days</p>
+        <p><strong>Refund Method:</strong> Automatic refund to your original payment method</p>
+      </div>
+      
+      <div class="warning-box">
+        <h3>Important Refund Information</h3>
+        <ul>
+          <li><strong>Timeline:</strong> Refunds typically appear in your account within 3-5 business days</li>
+          <li><strong>Bank Processing:</strong> Your bank may take additional time to process the refund</li>
+          <li><strong>Statement:</strong> The refund will appear as "BEX Marketplace Refund" on your statement</li>
+          <li><strong>Receipt:</strong> Keep this email as your refund receipt for your records</li>
+        </ul>
+      </div>
+      
+      <div class="info-box">
+        <h3>What Happens Next?</h3>
+        <ul>
+          <li>The refund has been automatically processed through Stripe</li>
+          <li>You will see the credit appear in your original payment method</li>
+          <li>No further action is required from you</li>
+          <li>You can continue shopping for similar or other products</li>
+        </ul>
+      </div>
+      
+      <div class="button-container">
+        <a href="${
+          process.env.CLIENT_URL
+        }" class="button">View Order Details</a>
+        <a href="${
+          process.env.CLIENT_URL
+        }/" class="button button-success">Continue Shopping</a>
+      </div>
+      
+      <div class="info-box">
+        <h3>Need Help?</h3>
+        <p>If you have any questions about this refund or don't see the credit in your account after 5 business days, please contact our support team:</p>
+        <ul>
+          <li>Email us with your refund ID: ${refundId}</li>
+          <li>Reference your order number: #${orderId.slice(0, 8)}</li>
+          <li>Include your Stripe refund ID: ${stripe_refund_id}</li>
+        </ul>
+      </div>
+      
+      <p>We apologize for any inconvenience that led to this refund. We're committed to providing you with the best shopping experience possible.</p>
+      
+      <p>Thank you for your understanding and for being a valued customer of BEX Marketplace.</p>
+      
+      <p>Best regards,<br>The BEX Marketplace Team</p>
+    `;
+
+    const fullEmailBody = emailHeader + body + emailFooter;
+
+    return await sendEmail(email, fullEmailBody, subject);
+  } catch (error) {
+    console.error("Error sending refund processed email:", error);
+    return {
+      success: false,
+      message: "Failed to send refund processed email",
+      error: error.message,
+    };
+  }
+};
+const sendSellerPayoutEmail = async (
+  payoutData,
+  sellerData,
+  orderItemData,
+  calculationData
+) => {
+  try {
+    const {
+      id: payoutId,
+      stripe_transfer_id,
+      amount: payoutAmount,
+      processed_at,
+      description,
+      fee_amount,
+      net_amount,
+    } = payoutData;
+
+    const { email, first_name, last_name, company_name } = sellerData;
+
+    const {
+      title: itemTitle,
+      quantity: itemQuantity,
+      price: itemPrice,
+      id: orderItemId,
+    } = orderItemData;
+
+    const {
+      itemTotal,
+      platformCommission,
+      commissionRate,
+      grossPayout,
+      stripePercentageFee,
+      stripeFixedFee,
+      totalStripeFee,
+      sellerPayout,
+    } = calculationData;
+
+    const subject = `💰 Payout Processed - $${net_amount.toFixed(
+      2
+    )} Transferred to Your Account`;
+
+    // Format dates
+    const payoutDateFormatted = new Date(processed_at).toLocaleDateString(
+      "en-US",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
+
+    const body = `
+      <h2>Payout Processed Successfully, ${first_name}!</h2>
+      
+      <div class="success-box">
+        <p><strong>Great news! Your payout has been processed and transferred to your Stripe account.</strong></p>
+        <p>$${net_amount.toFixed(
+          2
+        )} has been successfully transferred for your recent sale.</p>
+      </div>
+      
+      <div class="info-box">
+        <h3>Payout Details</h3>
+        <p><strong>Payout ID:</strong> ${payoutId}</p>
+        <p><strong>Stripe Transfer ID:</strong> ${stripe_transfer_id}</p>
+        <p><strong>Order Item ID:</strong> #${orderItemId.slice(0, 8)}</p>
+        <p><strong>Processed Date:</strong> ${payoutDateFormatted}</p>
+        <p><strong>Status:</strong> <span class="status-badge status-confirmed">✓ Completed</span></p>
+        ${
+          company_name
+            ? `<p><strong>Business:</strong> ${company_name}</p>`
+            : ""
+        }
+      </div>
+      
+      <div class="order-details">
+        <h3>Item Sold</h3>
+        <div class="order-item">
+          <div class="product-image">
+            <img src="https://via.placeholder.com/120x120?text=Sold+Item" 
+                 alt="${itemTitle}" 
+                 onerror="this.src='https://via.placeholder.com/120x120?text=Sold+Item'">
+          </div>
+          <div class="product-details">
+            <h4>${itemTitle}</h4>
+            <p><strong>Quantity Sold:</strong> ${itemQuantity}</p>
+            <p><strong>Unit Price:</strong> <span class="product-price">$${Number.parseFloat(
+              itemPrice
+            ).toFixed(2)}</span></p>
+            <p class="product-subtotal"><strong>Total Sale:</strong> $${itemTotal.toFixed(
+              2
+            )}</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="info-box">
+        <h3>💰 Payout Calculation Breakdown</h3>
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding: 8px 0;">
+            <span><strong>🛍️ Total Item Sale:</strong></span>
+            <span style="color: #007bff; font-weight: 600;">$${itemTotal.toFixed(
+              2
+            )}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding: 8px 0; border-top: 1px solid #dee2e6;">
+            <span><strong>📊 Platform Commission (${commissionRate}):</strong></span>
+            <span style="color: #dc3545;">-$${platformCommission.toFixed(
+              2
+            )}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding: 8px 0; background-color: #e8f5e8; margin: 8px -12px; padding: 12px;">
+            <span><strong>💵 Gross Payout (After Commission):</strong></span>
+            <span style="color: #28a745; font-weight: 600;">$${grossPayout.toFixed(
+              2
+            )}</span>
+          </div>
+          
+          <div style="margin: 15px 0; padding: 12px 0; border-top: 1px solid #dee2e6;">
+            <p style="margin: 0 0 8px 0; font-weight: 600; color: #6c757d;">Stripe Transfer Fees:</p>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding-left: 20px;">
+              <span>• Processing Fee (0.25%):</span>
+              <span style="color: #dc3545;">-$${stripePercentageFee.toFixed(
+                2
+              )}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding-left: 20px;">
+              <span>• Fixed Fee:</span>
+              <span style="color: #dc3545;">-$${stripeFixedFee.toFixed(
+                2
+              )}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-left: 20px; font-weight: 600;">
+              <span>Total Stripe Fees:</span>
+              <span style="color: #dc3545;">-$${totalStripeFee.toFixed(
+                2
+              )}</span>
+            </div>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; padding: 15px 0; border-top: 3px solid #28a745; font-size: 18px; font-weight: bold; background-color: #d4edda; margin: 15px -12px 0; padding: 15px 12px;">
+            <span><strong>🎉 Final Payout to You:</strong></span>
+            <span style="color: #155724; font-size: 20px;">$${net_amount.toFixed(
+              2
+            )}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="info-box">
+        <h3>💳 Transfer Information</h3>
+        <p><strong>Destination:</strong> Your connected Stripe Express account</p>
+        <p><strong>Transfer Method:</strong> Direct bank transfer</p>
+        <p><strong>Processing Time:</strong> Funds typically arrive within 1-2 business days</p>
+        <p><strong>Currency:</strong> USD</p>
+      </div>
+      
+      <div class="success-box">
+        <h3>🎯 What This Means</h3>
+        <ul>
+          <li><strong>Money Transferred:</strong> $${net_amount.toFixed(
+            2
+          )} has been sent to your bank account</li>
+          <li><strong>Available Soon:</strong> Funds will appear in your account within 1-2 business days</li>
+          <li><strong>Tax Records:</strong> Keep this email for your business tax records</li>
+          <li><strong>Stripe Dashboard:</strong> View detailed transfer information in your Stripe dashboard</li>
+        </ul>
+      </div>
+      
+      <div class="button-container">
+     
+        <a href="${
+          process.env.CLIENT_URL
+        }/seller/dashboard" class="button">Seller Dashboard</a>
+      </div>
+      
+      <div class="info-box">
+        <h3>📊 Payout Summary</h3>
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+          <p style="margin: 5px 0;"><strong>Item:</strong> ${itemTitle}</p>
+          <p style="margin: 5px 0;"><strong>Sale Amount:</strong> $${itemTotal.toFixed(
+            2
+          )}</p>
+          <p style="margin: 5px 0;"><strong>Your Earnings:</strong> $${net_amount.toFixed(
+            2
+          )}</p>
+          <p style="margin: 5px 0;"><strong>Profit Margin:</strong> ${(
+            (net_amount / itemTotal) *
+            100
+          ).toFixed(1)}%</p>
+        </div>
+      </div>
+      
+      <div class="warning-box">
+        <h3>📋 Important Notes</h3>
+        <ul>
+          <li><strong>Receipt:</strong> This email serves as your payout receipt</li>
+          <li><strong>Tax Responsibility:</strong> You're responsible for reporting this income</li>
+          <li><strong>Bank Processing:</strong> Your bank may take additional time to process the deposit</li>
+          <li><strong>Questions:</strong> Contact support if you don't see funds within 3 business days</li>
+        </ul>
+      </div>
+      
+      <div class="info-box">
+        <h3>🚀 Keep Selling!</h3>
+        <p>Congratulations on your successful sale! Here are some tips to keep growing your business:</p>
+        <ul>
+          <li>Add more products to increase your earning potential</li>
+          <li>Respond quickly to customer inquiries</li>
+          <li>Maintain high-quality product listings</li>
+          <li>Consider offering competitive pricing</li>
+        </ul>
+      </div>
+      
+      <p>Thank you for being a valued seller on BEX Marketplace! Your success is our success.</p>
+      
+      <p>If you have any questions about this payout or need assistance, our seller support team is here to help.</p>
+      
+      <p>Keep up the great work!</p>
+      
+      <p>Best regards,<br>The BEX Marketplace Team</p>
+    `;
+
+    const fullEmailBody = emailHeader + body + emailFooter;
+
+    return await sendEmail(email, fullEmailBody, subject);
+  } catch (error) {
+    console.error("Error sending seller payout email:", error);
+    return {
+      success: false,
+      message: "Failed to send seller payout email",
+      error: error.message,
+    };
+  }
+};
 module.exports = {
   sendOrderConfirmationEmail,
   sendOrderRejectionEmail,
@@ -1723,7 +2167,9 @@ module.exports = {
   sendAccountSuspensionEmail,
   sendAccountUnsuspensionEmail,
   sendOrderPlacementEmail,
+  sendRefundProcessedEmail,
   sendPaymentSuccessfulEmail,
   sendBuyerToSellerConversionEmail,
   sendSellerVerificationApprovalEmail,
+  sendSellerPayoutEmail,
 };

@@ -2,26 +2,46 @@ const express = require("express");
 const {
   createShipment,
   trackShipment,
-  getShipmentRates,
-  refreshShipmentData,
+  getShippingRates,
+  getSellerShipments,
+  getShipmentDetails,
+  cancelShipment,
+  getShipmentLabel,
   updateShipmentStatus,
-  startTrackingUpdates,
+  getOrderShipments,
+  bulkTrackShipments,
 } = require("../controllers/shipment.controller");
 
 const router = express.Router();
 
-// Create shipment for an order
-router.post("/create-shipment", createShipment);
+// Create UPS shipment for specific order items
+router.post("/create", createShipment);
 
-// Track shipment by order ID
-router.get("/track/:orderId", trackShipment);
-router.post("/start-tracking/:orderId", startTrackingUpdates);
+// Get shipping rates for an order from a specific seller
+router.get("/rates/:orderId/:sellerId", getShippingRates);
 
-// Get shipping rates for an order
-router.get("/rates/:orderId/:sellerId", getShipmentRates);
-router.get("/refresh/:orderId", refreshShipmentData);
+// Track shipment by shipment ID
+router.get("/track/:shipmentId", trackShipment);
 
-// Update shipment status
-router.put("/status/:orderId", updateShipmentStatus);
+// Get all shipments for a seller with pagination and filtering
+router.get("/seller/:sellerId", getSellerShipments);
+
+// Get specific shipment details
+router.get("/:shipmentId", getShipmentDetails);
+
+// Cancel shipment
+router.post("/:shipmentId/cancel", cancelShipment);
+
+// Get shipment label (download shipping label)
+router.get("/:shipmentId/label", getShipmentLabel);
+
+// Update shipment status manually
+router.put("/:shipmentId/status", updateShipmentStatus);
+
+// Get shipments by order ID
+router.get("/order/:orderId", getOrderShipments);
+
+// Bulk track multiple shipments
+router.post("/track/bulk", bulkTrackShipments);
 
 module.exports = router;

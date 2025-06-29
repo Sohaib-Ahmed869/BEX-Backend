@@ -6,6 +6,7 @@ const Payout = require("../../../models/stripePayout.model");
 const { User, OrderItem, Order, Product } = require("../../../models");
 const { sequelize } = require("../../../config/db");
 const Commission = require("../../../models/commission.model");
+const { sendSellerPayoutEmail } = require("../../../utils/EmailService");
 
 // Check if user has existing Stripe account
 exports.checkAccount = async (req, res) => {
@@ -234,6 +235,230 @@ exports.getAccountStatus = async (req, res) => {
 
 // Admin: Create payout to seller
 
+// exports.createPayout = async (req, res) => {
+//   const t = await sequelize.transaction();
+
+//   try {
+//     const { orderItemId } = req.body;
+//     const adminUserId = req.user.userId;
+
+//     // Validate required fields
+//     if (!orderItemId) {
+//       await t.rollback();
+//       return res.status(400).json({
+//         success: false,
+//         error: "orderItemId is required",
+//       });
+//     }
+
+//     // Fetch the order item with product details
+//     const orderItem = await OrderItem.findByPk(orderItemId, {
+//       include: [
+//         {
+//           model: Product,
+//           as: "product",
+//           attributes: ["user_id", "category"],
+//           required: true,
+//         },
+//       ],
+//       transaction: t,
+//     });
+
+//     if (!orderItem) {
+//       await t.rollback();
+//       return res.status(404).json({
+//         success: false,
+//         error: "Order item not found",
+//       });
+//     }
+
+//     // Check if already paid
+//     if (orderItem.seller_paid === true) {
+//       await t.rollback();
+//       return res.status(400).json({
+//         success: false,
+//         error: "This order item has already been paid out",
+//       });
+//     }
+
+//     const sellerId = orderItem.product.user_id;
+//     const productCategory = orderItem.product.category;
+
+//     // Get commission rate for this product category
+//     const commission = await Commission.findOne({
+//       where: { category: productCategory },
+//       transaction: t,
+//     });
+
+//     if (!commission) {
+//       await t.rollback();
+//       return res.status(404).json({
+//         success: false,
+//         error: `Commission rate not found for category: ${productCategory}`,
+//       });
+//     }
+
+//     // Get seller's Stripe account
+//     const stripeAccount = await StripeAccount.findOne({
+//       where: { user_id: sellerId },
+//       transaction: t,
+//     });
+
+//     if (!stripeAccount) {
+//       await t.rollback();
+//       return res.status(404).json({
+//         success: false,
+//         error: "Seller doesn't have a connected Stripe account",
+//       });
+//     }
+
+//     if (!stripeAccount.payouts_enabled) {
+//       await t.rollback();
+//       return res.status(400).json({
+//         success: false,
+//         error: "Seller's account is not enabled for payouts",
+//       });
+//     }
+
+//     // Calculate amounts
+//     const itemTotal =
+//       parseFloat(orderItem.price) * parseInt(orderItem.quantity);
+//     const commissionRate = parseFloat(commission.commission_rate);
+//     const platformCommission = (itemTotal * commissionRate) / 100;
+
+//     // Calculate gross payout (after platform commission but before Stripe fees)
+//     const grossPayout = itemTotal - platformCommission;
+
+//     // Stripe transfer fees for Express accounts:
+//     // - 0.25% of payout volume + $0.25 per payout
+//     const stripePercentageFee = grossPayout * 0.0025; // 0.25%
+//     const stripeFixedFee = 0.25; // $0.25 per payout
+//     const totalStripeFee = stripePercentageFee + stripeFixedFee;
+
+//     // Calculate final payout amount (what seller actually receives)
+//     const sellerPayout = grossPayout - totalStripeFee;
+
+//     // Generate description for payout
+//     const payoutDescription = `Payout by Bex Marketplace for order item: ${
+//       orderItem.title
+//     }, quantity: ${orderItem.quantity}, total: ${itemTotal.toFixed(
+//       2
+//     )}, commission: ${platformCommission.toFixed(
+//       2
+//     )}, Stripe fees: ${totalStripeFee.toFixed(2)}`;
+
+//     if (sellerPayout <= 0) {
+//       await t.rollback();
+//       return res.status(400).json({
+//         success: false,
+//         error: "Calculated payout amount is zero or negative",
+//         calculation: {
+//           itemTotal,
+//           commissionRate: `${commissionRate}%`,
+//           platformCommission,
+//           grossPayout,
+//           stripePercentageFee,
+//           stripeFixedFee,
+//           totalStripeFee,
+//           sellerPayout,
+//         },
+//       });
+//     }
+
+//     // Create transfer in Stripe (amount in cents)
+//     const transfer = await stripe.transfers.create({
+//       amount: Math.round(sellerPayout * 100),
+//       currency: "usd",
+//       destination: stripeAccount.stripe_account_id,
+//       description: payoutDescription,
+//       metadata: {
+//         seller_id: sellerId,
+//         admin_id: adminUserId,
+//         order_item_id: orderItemId,
+//         product_title: orderItem.title,
+//         product_category: productCategory,
+//         commission_rate: `${commissionRate}%`,
+//       },
+//     });
+
+//     // Create payout record
+//     const payout = await Payout.create(
+//       {
+//         id: uuidv4(),
+//         seller_id: sellerId,
+//         stripe_account_id: stripeAccount.stripe_account_id,
+//         stripe_transfer_id: transfer.id,
+//         amount: sellerPayout, // What seller actually receives
+//         status: "paid",
+//         description: payoutDescription,
+//         metadata: {
+//           order_item_id: orderItemId,
+//           product_title: orderItem.title,
+//           transfer_details: transfer,
+//           calculation: {
+//             itemTotal,
+//             commissionRate: `${commissionRate}%`,
+//             platformCommission,
+//             grossPayout,
+//             stripePercentageFee,
+//             stripeFixedFee,
+//             totalStripeFee,
+//             sellerPayout,
+//           },
+//         },
+//         initiated_by: adminUserId,
+//         order_items: [orderItemId],
+//         fee_amount: totalStripeFee, // Total Stripe fees (0.25% + $0.25)
+//         net_amount: sellerPayout, // Amount seller receives (after all deductions)
+//         processed_at: new Date(),
+//       },
+//       { transaction: t }
+//     );
+
+//     // Mark order item as paid
+//     await OrderItem.update(
+//       {
+//         seller_paid: true,
+//       },
+//       {
+//         where: { id: orderItemId },
+//         transaction: t,
+//       }
+//     );
+
+//     await t.commit();
+
+//     res.status(201).json({
+//       success: true,
+//       payout: {
+//         id: payout.id,
+//         stripeTransferId: transfer.id,
+//         orderItemId: orderItemId,
+//         productTitle: orderItem.title,
+//         productCategory: productCategory,
+//         commissionRate: `${commissionRate}%`,
+//       },
+//       calculation: {
+//         itemTotal,
+//         platformCommission,
+//         grossPayout,
+//         stripePercentageFee: `${stripePercentageFee.toFixed(2)} (0.25%)`,
+//         stripeFixedFee: `${stripeFixedFee.toFixed(2)}`,
+//         totalStripeFee,
+//         sellerPayout, // Final amount seller receives
+//         commissionRate: `${commissionRate}%`,
+//       },
+//       message: "Payout created successfully",
+//     });
+//   } catch (error) {
+//     await t.rollback();
+//     console.error("Create payout error:", error);
+//     res.status(500).json({
+//       success: false,
+//       error: error.message,
+//     });
+//   }
+// };
 exports.createPayout = async (req, res) => {
   const t = await sequelize.transaction();
 
@@ -321,8 +546,8 @@ exports.createPayout = async (req, res) => {
 
     // Calculate amounts
     const itemTotal =
-      parseFloat(orderItem.price) * parseInt(orderItem.quantity);
-    const commissionRate = parseFloat(commission.commission_rate);
+      Number.parseFloat(orderItem.price) * Number.parseInt(orderItem.quantity);
+    const commissionRate = Number.parseFloat(commission.commission_rate);
     const platformCommission = (itemTotal * commissionRate) / 100;
 
     // Calculate gross payout (after platform commission but before Stripe fees)
@@ -427,6 +652,7 @@ exports.createPayout = async (req, res) => {
 
     await t.commit();
 
+    // Send response first
     res.status(201).json({
       success: true,
       payout: {
@@ -449,6 +675,82 @@ exports.createPayout = async (req, res) => {
       },
       message: "Payout created successfully",
     });
+
+    // Send email asynchronously after response (fire and forget)
+    setImmediate(async () => {
+      try {
+        // Get seller data for email
+        const sellerData = await User.findByPk(sellerId, {
+          attributes: ["email", "first_name", "last_name", "company_name"],
+        });
+
+        if (!sellerData) {
+          console.error("Seller not found for payout email:", sellerId);
+          return;
+        }
+
+        // Prepare data for email
+        const payoutDataForEmail = {
+          id: payout.id,
+          stripe_transfer_id: transfer.id,
+          amount: sellerPayout,
+          processed_at: payout.processed_at,
+          description: payoutDescription,
+          fee_amount: totalStripeFee,
+          net_amount: sellerPayout,
+        };
+
+        const sellerDataForEmail = {
+          email: sellerData.email,
+          first_name: sellerData.first_name,
+          last_name: sellerData.last_name,
+          company_name: sellerData.company_name,
+        };
+
+        const orderItemDataForEmail = {
+          title: orderItem.title,
+          quantity: orderItem.quantity,
+          price: orderItem.price,
+          id: orderItemId,
+        };
+
+        const calculationDataForEmail = {
+          itemTotal,
+          platformCommission,
+          commissionRate: `${commissionRate}%`,
+          grossPayout,
+          stripePercentageFee,
+          stripeFixedFee,
+          totalStripeFee,
+          sellerPayout,
+        };
+
+        // Send payout notification email
+        const emailResult = await sendSellerPayoutEmail(
+          payoutDataForEmail,
+          sellerDataForEmail,
+          orderItemDataForEmail,
+          calculationDataForEmail
+        );
+
+        if (emailResult.success) {
+          console.log(
+            "Seller payout notification email sent successfully for payout:",
+            payout.id
+          );
+        } else {
+          console.error(
+            "Failed to send seller payout notification email:",
+            emailResult.message
+          );
+        }
+      } catch (emailError) {
+        console.error(
+          "Error sending seller payout notification email:",
+          emailError
+        );
+      }
+    });
   } catch (error) {
     await t.rollback();
     console.error("Create payout error:", error);
@@ -458,6 +760,7 @@ exports.createPayout = async (req, res) => {
     });
   }
 };
+
 // Get seller's payouts
 exports.getSellerPayouts = async (req, res) => {
   try {

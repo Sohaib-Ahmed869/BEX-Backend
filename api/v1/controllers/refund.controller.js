@@ -12,6 +12,122 @@ const Refund = require("../../../models/refund.model");
 const Transaction = require("../../../models/transaction.model");
 const { sequelize } = require("../../../config/db");
 const { Product, User } = require("../../../models");
+const { sendRefundProcessedEmail } = require("../../../utils/EmailService");
+
+// exports.refundOrderItem = async (req, res) => {
+//   const t = await sequelize.transaction();
+
+//   try {
+//     const { orderItemId, reason, notes, initiatedBy } = req.body;
+
+//     // Get order item with order details - USE THE ALIAS "order"
+//     const orderItem = await OrderItem.findByPk(orderItemId, {
+//       include: [
+//         {
+//           model: Order,
+//           as: "order", // Add the alias here
+//           attributes: ["id", "payment_intent_id", "total_amount"],
+//         },
+//       ],
+//       transaction: t,
+//     });
+
+//     if (!orderItem) {
+//       throw new Error("Order item not found");
+//     }
+
+//     if (orderItem.order_status === "refunded") {
+//       throw new Error("Order item already refunded");
+//     }
+
+//     // Access the order using lowercase "order" (the alias)
+//     if (!orderItem.order.payment_intent_id) {
+//       throw new Error("Payment intent not found for this order");
+//     }
+
+//     // Calculate refund amount (item price + retip if applicable)
+//     const itemRefundAmount =
+//       parseFloat(orderItem.price) * parseInt(orderItem.quantity);
+//     const retipRefundAmount = orderItem.retip_added
+//       ? parseFloat(orderItem.retip_price || 0) * parseInt(orderItem.quantity)
+//       : 0;
+//     const totalRefundAmount = itemRefundAmount + retipRefundAmount;
+
+//     // Create Stripe refund - use lowercase "order"
+//     const stripeRefund = await stripe.refunds.create({
+//       payment_intent: orderItem.order.payment_intent_id,
+//       amount: Math.round(totalRefundAmount * 100), // Convert to cents
+//       reason:
+//         reason === "seller_rejected"
+//           ? "requested_by_customer"
+//           : "requested_by_customer",
+//       metadata: {
+//         order_id: orderItem.order.id,
+//         order_item_id: orderItemId,
+//         item_title: orderItem.title,
+//         refund_reason: reason,
+//       },
+//     });
+
+//     // Create refund record - use lowercase "order"
+//     const refund = await Refund.create(
+//       {
+//         id: uuidv4(),
+//         order_id: orderItem.order.id,
+//         order_item_id: orderItemId,
+//         stripe_refund_id: stripeRefund.id,
+//         stripe_payment_intent_id: orderItem.order.payment_intent_id,
+//         refund_amount: totalRefundAmount,
+//         item_price: parseFloat(orderItem.price),
+//         item_quantity: parseInt(orderItem.quantity),
+//         reason: reason,
+//         status: stripeRefund.status,
+//         initiated_by: initiatedBy,
+//         processed_date: stripeRefund.status === "succeeded" ? new Date() : null,
+//         notes: notes,
+//         retip_refund_amount: retipRefundAmount,
+//       },
+//       { transaction: t }
+//     );
+
+//     // Create transaction record - use lowercase "order"
+//     await Transaction.create(
+//       {
+//         id: uuidv4(),
+//         order_id: orderItem.order.id,
+//         payment_processor_id: stripeRefund.id,
+//         amount: totalRefundAmount,
+//         type: "refund",
+//         status: "completed",
+//         payment_details: {
+//           refund_record_id: refund.id,
+//           order_item_id: orderItemId,
+//           item_title: orderItem.title,
+//         },
+//       },
+//       { transaction: t }
+//     );
+
+//     // Update order item status
+//     await orderItem.update({ order_status: "refunded" }, { transaction: t });
+
+//     await t.commit();
+
+//     res.json({
+//       success: true,
+//       refundId: refund.id,
+//       stripeRefundId: stripeRefund.id,
+//       refundAmount: totalRefundAmount,
+//       orderItemId: orderItemId,
+//       itemTitle: orderItem.title,
+//       message: "Order item refunded successfully",
+//     });
+//   } catch (error) {
+//     await t.rollback();
+//     console.error("Order item refund error:", error);
+//     res.status(500).json({ error: error.message });
+//   }
+// };
 
 exports.refundOrderItem = async (req, res) => {
   const t = await sequelize.transaction();
@@ -25,7 +141,13 @@ exports.refundOrderItem = async (req, res) => {
         {
           model: Order,
           as: "order", // Add the alias here
-          attributes: ["id", "payment_intent_id", "total_amount"],
+          attributes: [
+            "id",
+            "payment_intent_id",
+            "total_amount",
+            "buyer_id",
+            "order_date",
+          ],
         },
       ],
       transaction: t,
@@ -46,9 +168,10 @@ exports.refundOrderItem = async (req, res) => {
 
     // Calculate refund amount (item price + retip if applicable)
     const itemRefundAmount =
-      parseFloat(orderItem.price) * parseInt(orderItem.quantity);
+      Number.parseFloat(orderItem.price) * Number.parseInt(orderItem.quantity);
     const retipRefundAmount = orderItem.retip_added
-      ? parseFloat(orderItem.retip_price || 0) * parseInt(orderItem.quantity)
+      ? Number.parseFloat(orderItem.retip_price || 0) *
+        Number.parseInt(orderItem.quantity)
       : 0;
     const totalRefundAmount = itemRefundAmount + retipRefundAmount;
 
@@ -77,8 +200,8 @@ exports.refundOrderItem = async (req, res) => {
         stripe_refund_id: stripeRefund.id,
         stripe_payment_intent_id: orderItem.order.payment_intent_id,
         refund_amount: totalRefundAmount,
-        item_price: parseFloat(orderItem.price),
-        item_quantity: parseInt(orderItem.quantity),
+        item_price: Number.parseFloat(orderItem.price),
+        item_quantity: Number.parseInt(orderItem.quantity),
         reason: reason,
         status: stripeRefund.status,
         initiated_by: initiatedBy,
@@ -112,6 +235,7 @@ exports.refundOrderItem = async (req, res) => {
 
     await t.commit();
 
+    // Send response first
     res.json({
       success: true,
       refundId: refund.id,
@@ -120,6 +244,76 @@ exports.refundOrderItem = async (req, res) => {
       orderItemId: orderItemId,
       itemTitle: orderItem.title,
       message: "Order item refunded successfully",
+    });
+
+    // Send email asynchronously after response (fire and forget)
+    setImmediate(async () => {
+      try {
+        // Get user data for email
+        const userData = await User.findByPk(orderItem.order.buyer_id, {
+          attributes: ["email", "first_name", "last_name"],
+        });
+
+        if (!userData) {
+          console.error(
+            "User not found for refund email:",
+            orderItem.order.buyer_id
+          );
+          return;
+        }
+
+        // Prepare data for email
+        const refundDataForEmail = {
+          id: refund.id,
+          stripe_refund_id: stripeRefund.id,
+          refund_amount: totalRefundAmount,
+          item_price: orderItem.price,
+          item_quantity: orderItem.quantity,
+          reason: reason,
+          processed_date: refund.processed_date,
+          notes: notes,
+          retip_refund_amount: retipRefundAmount,
+        };
+
+        const orderDataForEmail = {
+          id: orderItem.order.id,
+          total_amount: orderItem.order.total_amount,
+          order_date: orderItem.order.order_date,
+          payment_intent_id: orderItem.order.payment_intent_id,
+        };
+
+        const userDataForEmail = {
+          email: userData.email,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+        };
+
+        const orderItemDataForEmail = {
+          title: orderItem.title,
+        };
+
+        // Send refund notification email
+        const emailResult = await sendRefundProcessedEmail(
+          refundDataForEmail,
+          orderDataForEmail,
+          userDataForEmail,
+          orderItemDataForEmail
+        );
+
+        if (emailResult.success) {
+          console.log(
+            "Refund notification email sent successfully for refund:",
+            refund.id
+          );
+        } else {
+          console.error(
+            "Failed to send refund notification email:",
+            emailResult.message
+          );
+        }
+      } catch (emailError) {
+        console.error("Error sending refund notification email:", emailError);
+      }
     });
   } catch (error) {
     await t.rollback();

@@ -22,6 +22,8 @@ const Refund = require("./refund.model");
 const { FlaggedProducts } = require("./flagged-products.model");
 const UserPermissions = require("./userPermissions.model");
 const Payout = require("./stripePayout.model"); // Add this import
+const ShipmentItem = require("./shipmentItems.model");
+const Shipment = require("./shipment.model");
 
 // Order - OrderItem associations
 Order.hasMany(OrderItem, {
@@ -299,6 +301,50 @@ Payout.belongsTo(User, {
   foreignKey: "initiated_by",
   as: "initiator",
 });
+// shipment association
+// Shipment associations
+Order.hasMany(Shipment, {
+  foreignKey: "order_id",
+  as: "shipments",
+});
+
+Shipment.belongsTo(Order, {
+  foreignKey: "order_id",
+  as: "order",
+});
+
+User.hasMany(Shipment, {
+  foreignKey: "seller_id",
+  as: "shipments",
+});
+
+Shipment.belongsTo(User, {
+  foreignKey: "seller_id",
+  as: "seller",
+});
+
+// Shipment - ShipmentItem associations
+Shipment.hasMany(ShipmentItem, {
+  foreignKey: "shipment_id",
+  as: "items",
+  onDelete: "CASCADE",
+});
+
+ShipmentItem.belongsTo(Shipment, {
+  foreignKey: "shipment_id",
+  as: "shipment",
+});
+
+// OrderItem - ShipmentItem associations
+OrderItem.hasMany(ShipmentItem, {
+  foreignKey: "order_item_id",
+  as: "shipment_items",
+});
+
+ShipmentItem.belongsTo(OrderItem, {
+  foreignKey: "order_item_id",
+  as: "order_item",
+});
 module.exports = {
   User,
   Refund,
@@ -324,4 +370,8 @@ module.exports = {
   OrderDispute,
   Chat,
   Message,
+  Shipment,
+  ShipmentItem,
+  UserPermissions,
+  Payout,
 };
