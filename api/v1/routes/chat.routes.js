@@ -8,6 +8,11 @@ const { authenticate } = require("../../middleware/auth.middleware");
 
 // Get or create chat for a product
 router.post("/initiate/:buyerId", chatController.initiateChat);
+router.post("/initiateSellerChat/:userId", chatController.initiateSellerChat);
+router.post(
+  "/initiateBuyerOrderChat/:userId",
+  chatController.initiateBuyerOrderChat
+);
 
 // Get user's chats
 

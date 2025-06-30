@@ -222,6 +222,15 @@ Chat.belongsTo(Product, {
   foreignKey: "product_id",
   as: "product",
 });
+Chat.belongsTo(OrderItem, {
+  foreignKey: "order_item_id",
+  as: "orderItem",
+});
+
+OrderItem.hasMany(Chat, {
+  foreignKey: "order_item_id",
+  as: "chats",
+});
 
 Message.belongsTo(User, { foreignKey: "sender_id", as: "sender" });
 // Flag Products
