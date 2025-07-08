@@ -344,17 +344,14 @@ exports.handleMobileUpload = async (req, res) => {
     uploadTokens.set(token, tokenData);
 
     // Enhanced Socket.IO emission with better error handling
+    // Enhanced Socket.IO emission with better error handling
     const uploadNamespace = req.app.get("uploadNamespace");
     if (uploadNamespace) {
       console.log("Emitting to upload namespace:", `mobile-upload-${token}`);
 
       uploadedImages.forEach((image) => {
-        // Emit to the upload namespace (this is the key fix!)
-        uploadNamespace.emit(`mobile-upload-${token}`, image);
-        // Also emit to specific room in upload namespace
-        uploadNamespace
-          .to(`upload-${token}`)
-          .emit(`mobile-upload-${token}`, image);
+        // FIXED: Only emit once to the upload namespace
+        uploadNamespace.emit(`mobile-upload-${token}`, image); // ← Only one emission now
 
         console.log("Emitted image data:", {
           id: image.id,
@@ -363,18 +360,6 @@ exports.handleMobileUpload = async (req, res) => {
           size: image.size,
         });
       });
-
-      // Emit a summary event to upload namespace
-      uploadNamespace.emit(`mobile-upload-summary-${token}`, {
-        token,
-        totalUploaded: uploadedImages.length,
-        totalFailed: failedUploads.length,
-        timestamp: new Date().toISOString(),
-      });
-
-      console.log(
-        `Successfully emitted ${uploadedImages.length} images to upload namespace`
-      );
     } else {
       console.error("Upload namespace not found!");
     }
@@ -478,6 +463,24 @@ exports.getUploadStats = async (req, res) => {
 /**
  * Cleanup expired tokens (for cron job or manual cleanup)
  */
+exports.cleanupExpiredTokens = async (req, res) => {
+  try {
+    const cleanedCount = cleanupExpiredTokens();
+
+    return res.status(200).json({
+      success: true,
+      message: `Cleaned up ${cleanedCount} expired tokens`,
+      cleanedCount,
+      activeTokens: uploadTokens.size,
+    });
+  } catch (error) {
+    console.error("Error cleaning up expired tokens:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
 
 // qrcode
 /**
@@ -619,7 +622,6 @@ exports.getUploadStats = async (req, res) => {
 
 exports.addProduct = async (req, res) => {
   const transaction = await sequelize.transaction();
-
   try {
     const userId = req.params.userId;
     const productData = req.body;
@@ -632,7 +634,7 @@ exports.addProduct = async (req, res) => {
       hasMobileImages: !!productData.mobileImages,
     });
 
-    // Parse attributes and retipping data
+    // Parse JSON strings if needed
     let attributes = {};
     if (productData.attributes) {
       try {
@@ -651,7 +653,7 @@ exports.addProduct = async (req, res) => {
       }
     }
 
-    // Parse mobile images
+    // Parse mobile uploaded images if any
     let mobileImages = [];
     if (productData.mobileImages) {
       try {
@@ -662,7 +664,7 @@ exports.addProduct = async (req, res) => {
       }
     }
 
-    // Validate required fields
+    // Validate basic product data
     if (
       !productData.title ||
       !productData.price ||
@@ -676,7 +678,7 @@ exports.addProduct = async (req, res) => {
       throw new Error("Missing required product information");
     }
 
-    // Process desktop images
+    // Upload desktop images to S3 if any
     const imageUrls = [];
     if (files && files.length > 0) {
       console.log("Processing desktop files:", files.length);
@@ -687,7 +689,7 @@ exports.addProduct = async (req, res) => {
       }
     }
 
-    // Process mobile images
+    // Process mobile uploaded images (move from temp to permanent)
     if (mobileImages && mobileImages.length > 0) {
       console.log("Processing mobile images:", mobileImages.length);
       for (const mobileImage of mobileImages) {
@@ -700,6 +702,7 @@ exports.addProduct = async (req, res) => {
             console.log("Mobile image moved to permanent:", permanentUrl);
           } catch (error) {
             console.error("Error moving mobile image:", error);
+            // If move fails, use original URL
             imageUrls.push(mobileImage.url);
           }
         }
@@ -708,15 +711,19 @@ exports.addProduct = async (req, res) => {
 
     console.log("Total images for product:", imageUrls.length);
 
-    // Validate at least one image
+    // Validate that at least one image is provided
     if (imageUrls.length === 0) {
       throw new Error("At least one image is required");
     }
 
-    const listForSelling = productData.list_for_selling !== "false";
+    // Convert list_for_selling to boolean if it's a string
+    const listForSelling =
+      productData.list_for_selling === "false" ? false : true;
+
+    // Parse quantity and validate
     const quantity = Number.parseInt(productData.quantity || 1, 10);
 
-    // Create product
+    // Create product with specifications directly in the model
     const product = await Product.create(
       {
         user_id: userId,
@@ -733,7 +740,7 @@ exports.addProduct = async (req, res) => {
         condition: productData.condition,
         subtype: productData.subtype || null,
         location: productData.location || null,
-        images: imageUrls,
+        images: imageUrls, // Combined desktop + mobile images
         specifications: attributes,
         is_active: true,
         list_for_selling: listForSelling,
@@ -741,7 +748,7 @@ exports.addProduct = async (req, res) => {
       { transaction }
     );
 
-    // Update listing stock
+    // Update listing stock if quantity > 0 and listing_id is provided
     if (quantity > 0 && productData.listing_id) {
       await ProductListing.increment("Stock", {
         by: 1,
@@ -750,7 +757,7 @@ exports.addProduct = async (req, res) => {
       });
     }
 
-    // Add retipping details if needed
+    // Add retipping details if category is Core Drill Bits
     if (productData.category === "Core Drill Bits" && retippingData) {
       await ProductRetippingDetails.create(
         {

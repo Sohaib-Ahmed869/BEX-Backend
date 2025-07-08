@@ -1,5 +1,3 @@
-// api/v1/socket/mobileUploadSocket.js - Upload socket handler
-
 const setupUploadSocket = (io) => {
   console.log("Setting up upload socket handlers...");
 
