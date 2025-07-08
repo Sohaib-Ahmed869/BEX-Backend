@@ -52,20 +52,20 @@ const uploadFileToS3 = async (file) => {
 const TOKEN_EXPIRATION_TIME = 10 * 60 * 1000;
 
 // Upload file to S3 for mobile uploads (TEMPORARY storage)
+
+// Upload file to S3 for mobile uploads (TEMPORARY storage)
 const uploadMobileFileToS3 = async (file) => {
-  // Validate file type
   const fileExtension = path.extname(file.originalname).toLowerCase();
   const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+
   if (!allowedExtensions.includes(fileExtension)) {
     throw new Error(
       "Invalid file format. Only JPEG, JPG, PNG, and WebP are allowed"
     );
   }
 
-  // Create unique filename in TEMP folder
   const filename = `temp-mobile-uploads/${uuidv4()}${fileExtension}`;
 
-  // Upload to S3 in temporary folder
   const uploadParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
     Key: filename,
@@ -78,15 +78,13 @@ const uploadMobileFileToS3 = async (file) => {
   return result.Location;
 };
 
-// Function to move file from temp to permanent location
+// Move file from temp to permanent location
 const moveFileFromTempToPermanent = async (tempUrl) => {
   try {
-    // Extract the key from the temp URL
     const tempKey = tempUrl.split(".com/")[1];
     const filename = path.basename(tempKey);
     const permanentKey = `products/${filename}`;
 
-    // Copy from temp to permanent location
     await s3
       .copyObject({
         Bucket: process.env.AWS_S3_BUCKET_NAME,
@@ -96,7 +94,6 @@ const moveFileFromTempToPermanent = async (tempUrl) => {
       })
       .promise();
 
-    // Delete the temp file
     await s3
       .deleteObject({
         Bucket: process.env.AWS_S3_BUCKET_NAME,
@@ -104,31 +101,71 @@ const moveFileFromTempToPermanent = async (tempUrl) => {
       })
       .promise();
 
-    // Return the permanent URL
     return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${permanentKey}`;
   } catch (error) {
     console.error("Error moving file from temp to permanent:", error);
-    // If move fails, return original URL
     return tempUrl;
   }
 };
 
 // Clean up expired tokens
-const cleanupExpiredTokens = () => {
-  const now = new Date();
-  let cleanedCount = 0;
+exports.cleanupTempImages = async (req, res) => {
+  try {
+    let cleanedCount = 0;
+    const now = new Date();
 
-  for (const [token, tokenData] of uploadTokens.entries()) {
-    if (tokenData.expiresAt < now) {
-      uploadTokens.delete(token);
-      cleanedCount++;
+    for (const [token, tokenData] of uploadTokens.entries()) {
+      if (tokenData.expiresAt < now) {
+        if (tokenData.tempImages && tokenData.tempImages.length > 0) {
+          for (const image of tokenData.tempImages) {
+            try {
+              const key = image.url.split(".com/")[1];
+              await s3
+                .deleteObject({
+                  Bucket: process.env.AWS_S3_BUCKET_NAME,
+                  Key: key,
+                })
+                .promise();
+              cleanedCount++;
+            } catch (error) {
+              console.error("Error deleting temp image:", error);
+            }
+          }
+        }
+        uploadTokens.delete(token);
+      }
     }
-  }
 
-  if (cleanedCount > 0) {
-    console.log(`Cleaned up ${cleanedCount} expired upload tokens`);
+    return res.status(200).json({
+      success: true,
+      message: `Cleaned up ${cleanedCount} temp images`,
+      cleanedCount,
+    });
+  } catch (error) {
+    console.error("Error cleaning up temp images:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
-  return cleanedCount;
+};
+
+exports.cleanupExpiredTokens = async (req, res) => {
+  try {
+    const cleanedCount = cleanupExpiredTokens();
+    return res.status(200).json({
+      success: true,
+      message: `Cleaned up ${cleanedCount} expired tokens`,
+      cleanedCount,
+      activeTokens: uploadTokens.size,
+    });
+  } catch (error) {
+    console.error("Error cleaning up expired tokens:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
 };
 
 /**
@@ -145,7 +182,6 @@ exports.registerUploadToken = async (req, res) => {
       });
     }
 
-    // Store token with metadata
     uploadTokens.set(token, {
       expiresAt: new Date(expiresAt),
       createdAt: new Date(),
@@ -154,17 +190,6 @@ exports.registerUploadToken = async (req, res) => {
       tempImages: [],
     });
 
-    // Notify via socket that token is registered
-    const io = req.app.get("io");
-    if (io) {
-      io.emit(`token-registered-${token}`, {
-        token,
-        expiresAt,
-        message: "Upload token registered successfully",
-      });
-    }
-
-    // Clean up expired tokens
     cleanupExpiredTokens();
 
     console.log(`Registered upload token: ${token}`);
@@ -197,7 +222,6 @@ exports.validateUploadToken = async (req, res) => {
     }
 
     const tokenData = uploadTokens.get(token);
-
     if (!tokenData) {
       return res.status(404).json({
         valid: false,
@@ -205,7 +229,6 @@ exports.validateUploadToken = async (req, res) => {
       });
     }
 
-    // Check if token has expired
     const now = new Date();
     if (tokenData.expiresAt < now) {
       uploadTokens.delete(token);
@@ -250,7 +273,6 @@ exports.handleMobileUpload = async (req, res) => {
       });
     }
 
-    // Validate token
     const tokenData = uploadTokens.get(token);
     if (!tokenData) {
       console.log("Invalid token attempted:", token);
@@ -260,7 +282,6 @@ exports.handleMobileUpload = async (req, res) => {
       });
     }
 
-    // Check if token has expired
     const now = new Date();
     if (tokenData.expiresAt < now) {
       uploadTokens.delete(token);
@@ -278,7 +299,6 @@ exports.handleMobileUpload = async (req, res) => {
       });
     }
 
-    // Upload files to S3 TEMP location
     const uploadedImages = [];
     const failedUploads = [];
 
@@ -286,7 +306,6 @@ exports.handleMobileUpload = async (req, res) => {
       try {
         console.log("Uploading file:", file.originalname, "Size:", file.size);
         const imageUrl = await uploadMobileFileToS3(file);
-
         const imageData = {
           id: uuidv4(),
           url: imageUrl,
@@ -298,7 +317,6 @@ exports.handleMobileUpload = async (req, res) => {
 
         uploadedImages.push(imageData);
         tokenData.tempImages.push(imageData);
-
         console.log(
           "Successfully uploaded:",
           imageData.name,
@@ -322,22 +340,21 @@ exports.handleMobileUpload = async (req, res) => {
       });
     }
 
-    // Update token upload count
     tokenData.uploadsCount += uploadedImages.length;
     uploadTokens.set(token, tokenData);
 
     // Enhanced Socket.IO emission with better error handling
-    const io = req.app.get("io");
-    if (io) {
-      console.log("Emitting to socket event:", `mobile-upload-${token}`);
+    const uploadNamespace = req.app.get("uploadNamespace");
+    if (uploadNamespace) {
+      console.log("Emitting to upload namespace:", `mobile-upload-${token}`);
 
-      // Emit to all connected clients
       uploadedImages.forEach((image) => {
-        // Emit to all clients
-        io.emit(`mobile-upload-${token}`, image);
-
-        // Also emit to specific upload room if using rooms
-        io.to(`upload-${token}`).emit(`mobile-upload-${token}`, image);
+        // Emit to the upload namespace (this is the key fix!)
+        uploadNamespace.emit(`mobile-upload-${token}`, image);
+        // Also emit to specific room in upload namespace
+        uploadNamespace
+          .to(`upload-${token}`)
+          .emit(`mobile-upload-${token}`, image);
 
         console.log("Emitted image data:", {
           id: image.id,
@@ -347,8 +364,8 @@ exports.handleMobileUpload = async (req, res) => {
         });
       });
 
-      // Emit a summary event
-      io.emit(`mobile-upload-summary-${token}`, {
+      // Emit a summary event to upload namespace
+      uploadNamespace.emit(`mobile-upload-summary-${token}`, {
         token,
         totalUploaded: uploadedImages.length,
         totalFailed: failedUploads.length,
@@ -356,10 +373,10 @@ exports.handleMobileUpload = async (req, res) => {
       });
 
       console.log(
-        `Successfully emitted ${uploadedImages.length} images to desktop`
+        `Successfully emitted ${uploadedImages.length} images to upload namespace`
       );
     } else {
-      console.error("Socket.IO instance not found!");
+      console.error("Upload namespace not found!");
     }
 
     return res.status(200).json({
@@ -461,26 +478,6 @@ exports.getUploadStats = async (req, res) => {
 /**
  * Cleanup expired tokens (for cron job or manual cleanup)
  */
-exports.cleanupExpiredTokens = async (req, res) => {
-  try {
-    const cleanedCount = cleanupExpiredTokens();
-
-    return res.status(200).json({
-      success: true,
-      message: `Cleaned up ${cleanedCount} expired tokens`,
-      cleanedCount,
-      activeTokens: uploadTokens.size,
-    });
-  } catch (error) {
-    console.error("Error cleaning up expired tokens:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-};
-
-// ... (keep other existing functions)
 
 // qrcode
 /**
@@ -622,6 +619,7 @@ exports.cleanupExpiredTokens = async (req, res) => {
 
 exports.addProduct = async (req, res) => {
   const transaction = await sequelize.transaction();
+
   try {
     const userId = req.params.userId;
     const productData = req.body;
@@ -634,7 +632,7 @@ exports.addProduct = async (req, res) => {
       hasMobileImages: !!productData.mobileImages,
     });
 
-    // Parse JSON strings if needed
+    // Parse attributes and retipping data
     let attributes = {};
     if (productData.attributes) {
       try {
@@ -653,7 +651,7 @@ exports.addProduct = async (req, res) => {
       }
     }
 
-    // Parse mobile uploaded images if any
+    // Parse mobile images
     let mobileImages = [];
     if (productData.mobileImages) {
       try {
@@ -664,7 +662,7 @@ exports.addProduct = async (req, res) => {
       }
     }
 
-    // Validate basic product data
+    // Validate required fields
     if (
       !productData.title ||
       !productData.price ||
@@ -678,7 +676,7 @@ exports.addProduct = async (req, res) => {
       throw new Error("Missing required product information");
     }
 
-    // Upload desktop images to S3 if any
+    // Process desktop images
     const imageUrls = [];
     if (files && files.length > 0) {
       console.log("Processing desktop files:", files.length);
@@ -689,7 +687,7 @@ exports.addProduct = async (req, res) => {
       }
     }
 
-    // Process mobile uploaded images (move from temp to permanent)
+    // Process mobile images
     if (mobileImages && mobileImages.length > 0) {
       console.log("Processing mobile images:", mobileImages.length);
       for (const mobileImage of mobileImages) {
@@ -702,7 +700,6 @@ exports.addProduct = async (req, res) => {
             console.log("Mobile image moved to permanent:", permanentUrl);
           } catch (error) {
             console.error("Error moving mobile image:", error);
-            // If move fails, use original URL
             imageUrls.push(mobileImage.url);
           }
         }
@@ -711,19 +708,15 @@ exports.addProduct = async (req, res) => {
 
     console.log("Total images for product:", imageUrls.length);
 
-    // Validate that at least one image is provided
+    // Validate at least one image
     if (imageUrls.length === 0) {
       throw new Error("At least one image is required");
     }
 
-    // Convert list_for_selling to boolean if it's a string
-    const listForSelling =
-      productData.list_for_selling === "false" ? false : true;
-
-    // Parse quantity and validate
+    const listForSelling = productData.list_for_selling !== "false";
     const quantity = Number.parseInt(productData.quantity || 1, 10);
 
-    // Create product with specifications directly in the model
+    // Create product
     const product = await Product.create(
       {
         user_id: userId,
@@ -740,7 +733,7 @@ exports.addProduct = async (req, res) => {
         condition: productData.condition,
         subtype: productData.subtype || null,
         location: productData.location || null,
-        images: imageUrls, // Combined desktop + mobile images
+        images: imageUrls,
         specifications: attributes,
         is_active: true,
         list_for_selling: listForSelling,
@@ -748,7 +741,7 @@ exports.addProduct = async (req, res) => {
       { transaction }
     );
 
-    // Update listing stock if quantity > 0 and listing_id is provided
+    // Update listing stock
     if (quantity > 0 && productData.listing_id) {
       await ProductListing.increment("Stock", {
         by: 1,
@@ -757,7 +750,7 @@ exports.addProduct = async (req, res) => {
       });
     }
 
-    // Add retipping details if category is Core Drill Bits
+    // Add retipping details if needed
     if (productData.category === "Core Drill Bits" && retippingData) {
       await ProductRetippingDetails.create(
         {

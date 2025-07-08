@@ -1,4 +1,4 @@
-// api/v1/socket/mobileUploadSocket.js - New file for upload socket handling
+// api/v1/socket/mobileUploadSocket.js - Upload socket handler
 
 const setupUploadSocket = (io) => {
   console.log("Setting up upload socket handlers...");
@@ -14,6 +14,7 @@ const setupUploadSocket = (io) => {
     socket.emit("connection-confirmed", {
       socketId: socket.id,
       timestamp: new Date().toISOString(),
+      namespace: "/uploads",
     });
 
     // Handle upload token registration (for QR code uploads)
@@ -29,7 +30,11 @@ const setupUploadSocket = (io) => {
         success: true,
         token,
         message: "Upload token registered successfully",
+        socketId: socket.id,
+        room: `upload-${token}`,
       });
+
+      console.log(`Socket ${socket.id} joined room: upload-${token}`);
     });
 
     // Handle upload token cleanup
@@ -39,10 +44,39 @@ const setupUploadSocket = (io) => {
       socket.leave(`upload-${token}`);
     });
 
+    // Handle client connection confirmation
+    socket.on("client-connected", (data) => {
+      console.log("Upload client connected:", data);
+      socket.emit("connection-confirmed", {
+        socketId: socket.id,
+        timestamp: new Date().toISOString(),
+        message: "Upload socket ready",
+        namespace: "/uploads",
+      });
+    });
+
+    // Add ping/pong for connection health
+    socket.on("ping", () => {
+      socket.emit("pong", {
+        timestamp: new Date().toISOString(),
+        socketId: socket.id,
+      });
+    });
+
     socket.on("disconnect", (reason) => {
       console.log(`Upload socket ${socket.id} disconnected: ${reason}`);
     });
   });
+
+  // Add debugging method to check active connections
+  uploadNamespace.checkConnections = () => {
+    const sockets = Array.from(uploadNamespace.sockets.keys());
+    console.log(
+      `Upload namespace has ${sockets.length} active connections:`,
+      sockets
+    );
+    return sockets;
+  };
 
   return uploadNamespace;
 };
