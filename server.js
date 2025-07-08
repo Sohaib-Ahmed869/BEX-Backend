@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { sequelize } = require("./config/db");
 const User = require("./models/user.model");
+const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const passport = require("passport");
@@ -54,7 +55,8 @@ app.use(
     credentials: true,
   })
 );
-
+// Make sure socket.io instance is available to routes
+app.set("io", io);
 // Setup Socket.IO
 setupChatSocket(io);
 
@@ -106,7 +108,11 @@ app.use(passport.initialize());
 
 // Add Google auth routes
 app.use("/api/googleauth", googleAuthRoutes);
-
+// Handle mobile upload route specifically (add this before the basic route)
+app.get("/mobile-upload/:token", (req, res) => {
+  // This will serve your React app which handles the routing
+  res.sendFile(path.join(__dirname, "../build", "index.html"));
+});
 // Basic route
 app.get("/", (req, res) => {
   res.send("BEX API is running");

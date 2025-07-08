@@ -12,6 +12,11 @@ const {
   searchProducts,
   toggleFeatureProduct,
   getAllProducts,
+  registerUploadToken,
+  validateUploadToken,
+  handleMobileUpload,
+  getUploadStats,
+  cleanupExpiredTokens,
 } = require("../controllers/products.controller");
 
 const storage = multer.memoryStorage();
@@ -36,6 +41,12 @@ router.put("/update/:productId", upload.array("files", 10), updateProduct);
 // DELETE routes
 router.delete("/:productId", deleteProduct);
 router.patch("/:productId/toggle-feature", toggleFeatureProduct);
+
+router.post("/register-upload-token", registerUploadToken);
+router.post("/mobile-upload", upload.array("files", 10), handleMobileUpload);
+router.post("/cleanup-expired-tokens", cleanupExpiredTokens);
+router.get("/validate-upload-token/:token", validateUploadToken);
+router.get("/upload-stats/:token", getUploadStats);
 // DYNAMIC PARAMETER ROUTES LAST
 router.get("/:userId", getUserProducts);
 
