@@ -10,6 +10,7 @@ const AWS = require("aws-sdk");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const { Op } = require("sequelize");
+const uploadTokens = new Map();
 
 // Configure AWS S3
 const s3 = new AWS.S3({
@@ -46,7 +47,6 @@ const uploadFileToS3 = async (file) => {
 // qrCode
 
 // In-memory store for upload tokens (in production, use Redis)
-const uploadTokens = new Map();
 
 // Token expiration time (10 minutes)
 const TOKEN_EXPIRATION_TIME = 10 * 60 * 1000;
@@ -151,8 +151,18 @@ exports.registerUploadToken = async (req, res) => {
       createdAt: new Date(),
       used: false,
       uploadsCount: 0,
-      tempImages: [], // Store temp image URLs
+      tempImages: [],
     });
+
+    // Notify via socket that token is registered
+    const io = req.app.get("io");
+    if (io) {
+      io.emit(`token-registered-${token}`, {
+        token,
+        expiresAt,
+        message: "Upload token registered successfully",
+      });
+    }
 
     // Clean up expired tokens
     cleanupExpiredTokens();
@@ -227,6 +237,12 @@ exports.handleMobileUpload = async (req, res) => {
     const { token } = req.body;
     const files = req.files || [];
 
+    console.log("Mobile upload request received:", {
+      token,
+      filesCount: files.length,
+      timestamp: new Date().toISOString(),
+    });
+
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -237,6 +253,7 @@ exports.handleMobileUpload = async (req, res) => {
     // Validate token
     const tokenData = uploadTokens.get(token);
     if (!tokenData) {
+      console.log("Invalid token attempted:", token);
       return res.status(400).json({
         success: false,
         message: "Invalid upload token",
@@ -247,6 +264,7 @@ exports.handleMobileUpload = async (req, res) => {
     const now = new Date();
     if (tokenData.expiresAt < now) {
       uploadTokens.delete(token);
+      console.log("Expired token attempted:", token);
       return res.status(400).json({
         success: false,
         message: "Upload token has expired",
@@ -266,19 +284,27 @@ exports.handleMobileUpload = async (req, res) => {
 
     for (const file of files) {
       try {
-        const imageUrl = await uploadMobileFileToS3(file); // Uploads to temp folder
+        console.log("Uploading file:", file.originalname, "Size:", file.size);
+        const imageUrl = await uploadMobileFileToS3(file);
+
         const imageData = {
           id: uuidv4(),
           url: imageUrl,
           name: file.originalname,
           size: file.size,
           uploadedAt: new Date().toISOString(),
-          isTemp: true, // Mark as temporary
+          isTemp: true,
         };
-        uploadedImages.push(imageData);
 
-        // Store in token data for cleanup later
+        uploadedImages.push(imageData);
         tokenData.tempImages.push(imageData);
+
+        console.log(
+          "Successfully uploaded:",
+          imageData.name,
+          "URL:",
+          imageData.url
+        );
       } catch (uploadError) {
         console.error("Error uploading file:", uploadError);
         failedUploads.push({
@@ -300,15 +326,40 @@ exports.handleMobileUpload = async (req, res) => {
     tokenData.uploadsCount += uploadedImages.length;
     uploadTokens.set(token, tokenData);
 
-    // Get the socket.io instance from app and emit to desktop
+    // Enhanced Socket.IO emission with better error handling
     const io = req.app.get("io");
     if (io) {
+      console.log("Emitting to socket event:", `mobile-upload-${token}`);
+
+      // Emit to all connected clients
       uploadedImages.forEach((image) => {
+        // Emit to all clients
         io.emit(`mobile-upload-${token}`, image);
+
+        // Also emit to specific upload room if using rooms
+        io.to(`upload-${token}`).emit(`mobile-upload-${token}`, image);
+
+        console.log("Emitted image data:", {
+          id: image.id,
+          name: image.name,
+          url: image.url.substring(0, 50) + "...",
+          size: image.size,
+        });
       });
+
+      // Emit a summary event
+      io.emit(`mobile-upload-summary-${token}`, {
+        token,
+        totalUploaded: uploadedImages.length,
+        totalFailed: failedUploads.length,
+        timestamp: new Date().toISOString(),
+      });
+
       console.log(
-        `Emitted ${uploadedImages.length} temp images to desktop for token: ${token}`
+        `Successfully emitted ${uploadedImages.length} images to desktop`
       );
+    } else {
+      console.error("Socket.IO instance not found!");
     }
 
     return res.status(200).json({
@@ -576,6 +627,13 @@ exports.addProduct = async (req, res) => {
     const productData = req.body;
     const files = req.files || [];
 
+    console.log("Adding product with data:", {
+      userId,
+      title: productData.title,
+      filesCount: files.length,
+      hasMobileImages: !!productData.mobileImages,
+    });
+
     // Parse JSON strings if needed
     let attributes = {};
     if (productData.attributes) {
@@ -600,6 +658,7 @@ exports.addProduct = async (req, res) => {
     if (productData.mobileImages) {
       try {
         mobileImages = JSON.parse(productData.mobileImages);
+        console.log("Parsed mobile images:", mobileImages.length);
       } catch (e) {
         console.error("Error parsing mobile images:", e);
       }
@@ -611,7 +670,6 @@ exports.addProduct = async (req, res) => {
       !productData.price ||
       !productData.condition ||
       !productData.category ||
-      !productData.quantity ||
       !productData.weight ||
       !productData.height ||
       !productData.width ||
@@ -623,22 +681,39 @@ exports.addProduct = async (req, res) => {
     // Upload desktop images to S3 if any
     const imageUrls = [];
     if (files && files.length > 0) {
+      console.log("Processing desktop files:", files.length);
       for (const file of files) {
         const imageUrl = await uploadFileToS3(file);
         imageUrls.push(imageUrl);
+        console.log("Desktop image uploaded:", imageUrl);
       }
     }
 
     // Process mobile uploaded images (move from temp to permanent)
     if (mobileImages && mobileImages.length > 0) {
+      console.log("Processing mobile images:", mobileImages.length);
       for (const mobileImage of mobileImages) {
         if (mobileImage.url) {
-          const permanentUrl = await moveFileFromTempToPermanent(
-            mobileImage.url
-          );
-          imageUrls.push(permanentUrl);
+          try {
+            const permanentUrl = await moveFileFromTempToPermanent(
+              mobileImage.url
+            );
+            imageUrls.push(permanentUrl);
+            console.log("Mobile image moved to permanent:", permanentUrl);
+          } catch (error) {
+            console.error("Error moving mobile image:", error);
+            // If move fails, use original URL
+            imageUrls.push(mobileImage.url);
+          }
         }
       }
+    }
+
+    console.log("Total images for product:", imageUrls.length);
+
+    // Validate that at least one image is provided
+    if (imageUrls.length === 0) {
+      throw new Error("At least one image is required");
     }
 
     // Convert list_for_selling to boolean if it's a string
@@ -707,21 +782,30 @@ exports.addProduct = async (req, res) => {
 
     await transaction.commit();
 
+    console.log("Product created successfully:", {
+      id: product.id,
+      title: product.title,
+      imagesCount: imageUrls.length,
+    });
+
     return res.status(201).json({
       success: true,
       message: "Product added successfully",
       data: {
         id: product.id,
+        imagesCount: imageUrls.length,
       },
     });
   } catch (error) {
     await transaction.rollback();
+    console.error("Error adding product:", error);
     return res.status(400).json({
       success: false,
       message: error.message,
     });
   }
 };
+
 exports.getProducts = async (req, res) => {
   try {
     // First, check if the association exists

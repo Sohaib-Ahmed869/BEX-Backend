@@ -36,15 +36,33 @@ const socketIo = require("socket.io");
 const {
   startProductExpirationCronJob,
 } = require("./jobs/ProductExpirationCronJob");
+const { setupUploadSocket } = require("./api/v1/socket/mobileUploadSocket");
 
 const app = express();
 const server = http.createServer(app);
+// const io = socketIo(server, {
+//   cors: {
+//     origin: process.env.CLIENT_URL || "http://localhost:3000",
+//     methods: ["GET", "POST"],
+//     credentials: true,
+//   },
+// });
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: [
+      process.env.CLIENT_URL || "http://localhost:3000",
+      process.env.CLIENT_URL || "http://localhost:3173",
+      "http://localhost:3000",
+      "http://localhost:3173",
+    ],
     methods: ["GET", "POST"],
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
   },
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 const PORT = process.env.PORT || 5000;
 
@@ -59,6 +77,7 @@ app.use(
 app.set("io", io);
 // Setup Socket.IO
 setupChatSocket(io);
+setupUploadSocket(io); // New upload socket
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
