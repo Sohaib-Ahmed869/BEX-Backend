@@ -45,13 +45,7 @@ const uploadFileToS3 = async (file) => {
 };
 
 // qrCode
-
-// In-memory store for upload tokens (in production, use Redis)
-
-// Token expiration time (10 minutes)
 const TOKEN_EXPIRATION_TIME = 10 * 60 * 1000;
-
-// Upload file to S3 for mobile uploads (TEMPORARY storage)
 
 // Upload file to S3 for mobile uploads (TEMPORARY storage)
 const uploadMobileFileToS3 = async (file) => {
@@ -344,7 +338,6 @@ exports.handleMobileUpload = async (req, res) => {
     uploadTokens.set(token, tokenData);
 
     // Enhanced Socket.IO emission with better error handling
-    // Enhanced Socket.IO emission with better error handling
     const uploadNamespace = req.app.get("uploadNamespace");
     if (uploadNamespace) {
       console.log("Emitting to upload namespace:", `mobile-upload-${token}`);
@@ -486,140 +479,6 @@ exports.cleanupExpiredTokens = async (req, res) => {
 /**
  * Add a new product with specifications and retipping info if applicable
  */
-// exports.addProduct = async (req, res) => {
-//   const transaction = await sequelize.transaction();
-
-//   try {
-//     const userId = req.params.userId;
-//     const productData = req.body;
-//     const files = req.files || [];
-
-//     // Parse JSON strings if needed
-//     let attributes = {};
-//     if (productData.attributes) {
-//       try {
-//         attributes = JSON.parse(productData.attributes);
-//       } catch (e) {
-//         attributes = productData.attributes;
-//       }
-//     }
-
-//     let retippingData = null;
-//     if (productData.retipping) {
-//       try {
-//         retippingData = JSON.parse(productData.retipping);
-//       } catch (e) {
-//         retippingData = productData.retipping;
-//       }
-//     }
-
-//     // Validate basic product data
-//     if (
-//       !productData.title ||
-//       !productData.price ||
-//       !productData.condition ||
-//       !productData.category ||
-//       !productData.quantity ||
-//       !productData.weight ||
-//       !productData.height ||
-//       !productData.width ||
-//       !productData.length
-//     ) {
-//       throw new Error("Missing required product information");
-//     }
-
-//     // Upload images to S3 if any
-//     const imageUrls = [];
-//     if (files && files.length > 0) {
-//       for (const file of files) {
-//         const imageUrl = await uploadFileToS3(file);
-//         imageUrls.push(imageUrl);
-//       }
-//     }
-
-//     // Convert list_for_selling to boolean if it's a string
-//     const listForSelling =
-//       productData.list_for_selling === "false" ? false : true;
-
-//     // Parse quantity and validate
-//     const quantity = parseInt(productData.quantity || 1, 10);
-
-//     // Create product with specifications directly in the model
-//     const product = await Product.create(
-//       {
-//         user_id: userId,
-//         listing_id: productData.listing_id,
-//         category: productData.category,
-//         title: productData.title,
-//         description: productData.description || "",
-//         price: parseFloat(productData.price),
-//         quantity: quantity,
-//         weight: parseFloat(productData.weight),
-//         height: parseFloat(productData.height),
-//         width: parseFloat(productData.width),
-//         length: parseFloat(productData.length),
-//         condition: productData.condition,
-//         subtype: productData.subtype || null,
-//         location: productData.location || null,
-//         images: imageUrls,
-//         specifications: attributes, // Store attributes directly as JSONB
-//         is_active: true,
-//         list_for_selling: listForSelling,
-//         // Product model has hooks to handle expiration_date and requires_retipping
-//       },
-//       { transaction }
-//     );
-
-//     // Update listing stock if quantity > 0 and listing_id is provided
-//     if (quantity > 0 && productData.listing_id) {
-//       await ProductListing.increment("Stock", {
-//         by: 1, // Increment by 1 (meaning this listing now has 1 more product in stock)
-//         where: { id: productData.listing_id },
-//         transaction,
-//       });
-//     }
-
-//     // Add retipping details if category is Core Drill Bits
-//     if (productData.category === "Core Drill Bits" && retippingData) {
-//       await ProductRetippingDetails.create(
-//         {
-//           product_id: product.id,
-//           diameter: retippingData.diameter,
-//           enable_diy:
-//             retippingData.enable_diy === "true" ||
-//             retippingData.enable_diy === true,
-//           per_segment_price: retippingData.per_segment_price
-//             ? parseFloat(retippingData.per_segment_price)
-//             : null,
-//           segments: retippingData.segments
-//             ? parseInt(retippingData.segments, 10)
-//             : null,
-//           total_price: retippingData.total_price
-//             ? parseFloat(retippingData.total_price)
-//             : null,
-//         },
-//         { transaction }
-//       );
-//     }
-
-//     await transaction.commit();
-
-//     return res.status(201).json({
-//       success: true,
-//       message: "Product added successfully",
-//       data: {
-//         id: product.id,
-//       },
-//     });
-//   } catch (error) {
-//     await transaction.rollback();
-//     return res.status(400).json({
-//       success: false,
-//       message: error.message,
-//     });
-//   }
-// };
-
 exports.addProduct = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
