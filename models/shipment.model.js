@@ -25,10 +25,6 @@ const Shipment = sequelize.define(
         key: "id",
       },
     },
-    ups_account_number: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
     tracking_number: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -37,26 +33,61 @@ const Shipment = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    shipment_status: {
-      type: DataTypes.ENUM(
-        "created",
-        "processing",
-        "shipped",
-        "in_transit",
-        "delivered",
-        "exception",
-        "returned"
-      ),
-      defaultValue: "created",
+    carrier: {
+      type: DataTypes.STRING,
+      defaultValue: "UPS",
       allowNull: false,
     },
-    shipping_service: {
+    service_code: {
       type: DataTypes.STRING,
+      defaultValue: "03", // UPS Ground
       allowNull: false,
-      defaultValue: "UPS Ground",
+    },
+    service_description: {
+      type: DataTypes.STRING,
+      defaultValue: "Ground",
+      allowNull: false,
     },
     shipping_cost: {
       type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
+    weight: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
+    dimensions: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      // { length: 10, width: 8, height: 6 }
+    },
+    shipping_address: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+    },
+    shipper_address: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+    },
+    status: {
+      type: DataTypes.ENUM(
+        "pending",
+        "created",
+        "pickup_scheduled",
+        "shipped",
+        "in_transit",
+        "out_for_delivery",
+        "delivered",
+        "exception",
+        "cancelled",
+        "returned"
+      ),
+      defaultValue: "pending",
+      allowNull: false,
+    },
+    label_url: {
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     estimated_delivery_date: {
@@ -67,44 +98,57 @@ const Shipment = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
-    package_weight: {
-      type: DataTypes.DECIMAL(5, 2),
+    // Pickup related fields
+    pickup_request_number: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
-    package_dimensions: {
+    pickup_date: {
+      type: DataTypes.STRING, // YYYYMMDD format
+      allowNull: true,
+    },
+    pickup_ready_time: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    pickup_close_time: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    // Return related fields
+    return_reason: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    original_shipment_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "shipments",
+        key: "id",
+      },
+    },
+    return_shipment_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "shipments",
+        key: "id",
+      },
+    },
+    // UPS API responses
+    ups_response: {
       type: DataTypes.JSONB,
       allowNull: true,
     },
-    shipping_label_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    ups_response_data: {
+    ups_pickup_response: {
       type: DataTypes.JSONB,
       allowNull: true,
     },
-    shipped_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    // Store order item IDs that are included in this shipment
-    order_item_ids: {
+    tracking_events: {
       type: DataTypes.JSONB,
-      allowNull: false,
+      allowNull: true,
       defaultValue: [],
-    },
-    // Additional UPS specific fields
-    ups_service_code: {
-      type: DataTypes.STRING,
-      allowNull: true, // 03 for Ground, 01 for Next Day Air, etc.
-    },
-    delivery_confirmation: {
-      type: DataTypes.STRING,
-      allowNull: true, // 1 for Delivery Confirmation, 2 for Signature Required
-    },
-    insurance_value: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: true,
     },
   },
   {

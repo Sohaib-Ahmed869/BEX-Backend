@@ -32,6 +32,7 @@ const UserPermissionRoutes = require("./api/v1/routes/userPermissions.routes");
 const RefundRoutes = require("./api/v1/routes/refund.routes");
 const StripeConnectRoutes = require("./api/v1/routes/stripeConnect.routes");
 const PayoutStatsRoutes = require("./api/v1/routes/PayoutStats.routes");
+const ShipmentRoutes = require("./api/v1/routes/shipment.routes");
 const http = require("http");
 const socketIo = require("socket.io");
 const {
@@ -122,6 +123,7 @@ app.use("/api/stripe-connect", StripeConnectRoutes);
 app.use("/api/admin/payoutStats", PayoutStatsRoutes);
 app.use("/api/chat", ChatRoutes);
 app.use("/api/shipstation", shipstationRoutes);
+app.use("/api/shipments", ShipmentRoutes);
 app.use(
   "/api/webhooks/shipstation",
   express.raw({ type: "application/json" }),

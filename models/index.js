@@ -354,6 +354,7 @@ ShipmentItem.belongsTo(OrderItem, {
   foreignKey: "order_item_id",
   as: "order_item",
 });
+
 module.exports = {
   User,
   Refund,

@@ -25,7 +25,7 @@ const ShipmentItem = sequelize.define(
         key: "id",
       },
     },
-    quantity_shipped: {
+    quantity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 1,

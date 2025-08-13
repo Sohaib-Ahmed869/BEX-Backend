@@ -1,47 +1,59 @@
 const express = require("express");
 const {
-  createShipment,
-  trackShipment,
-  getShippingRates,
+  createShipmentsForOrder,
+  processUPSShipment,
+  schedulePickup,
+  cancelPickup,
+  voidShipment,
+  handleReturnShipment,
   getSellerShipments,
   getShipmentDetails,
-  cancelShipment,
-  getShipmentLabel,
-  updateShipmentStatus,
-  getOrderShipments,
-  bulkTrackShipments,
+  trackShipment,
+  getSimulationStatuses,
+  getDeliveryFee,
+  getBuyerShipments,
+  testUPSAuth,
 } = require("../controllers/shipment.controller");
 
 const router = express.Router();
 
-// Create UPS shipment for specific order items
-router.post("/create", createShipment);
+// Test UPS authentication
+router.get("/test-ups-auth", testUPSAuth);
 
-// Get shipping rates for an order from a specific seller
-router.get("/rates/:orderId/:sellerId", getShippingRates);
+// Delivery fee calculation for checkout
+router.post("/calculate-delivery-fee", getDeliveryFee);
 
-// Track shipment by shipment ID
-router.get("/track/:shipmentId", trackShipment);
+// Create shipments for an order
+router.post("/create/:orderId", createShipmentsForOrder);
 
-// Get all shipments for a seller with pagination and filtering
+// Process UPS shipment creation
+router.post("/process-ups/:shipmentId", processUPSShipment);
+
+// Schedule pickup for shipment
+router.post("/schedule-pickup/:shipmentId", schedulePickup);
+
+// Cancel pickup for shipment
+router.delete("/cancel-pickup/:shipmentId", cancelPickup);
+
+// Void shipment
+router.delete("/void/:shipmentId", voidShipment);
+
+// Handle return shipment
+router.post("/return/:shipmentId", handleReturnShipment);
+
+// Track shipment (with optional simulation support in development)
+router.put("/track/:shipmentId", trackShipment);
+
+// Get available simulation statuses (development only)
+router.get("/simulation-statuses", getSimulationStatuses);
+
+// Get shipment details
+router.get("/details/:shipmentId", getShipmentDetails);
+
+// Get seller's shipments
 router.get("/seller/:sellerId", getSellerShipments);
 
-// Get specific shipment details
-router.get("/:shipmentId", getShipmentDetails);
-
-// Cancel shipment
-router.post("/:shipmentId/cancel", cancelShipment);
-
-// Get shipment label (download shipping label)
-router.get("/:shipmentId/label", getShipmentLabel);
-
-// Update shipment status manually
-router.put("/:shipmentId/status", updateShipmentStatus);
-
-// Get shipments by order ID
-router.get("/order/:orderId", getOrderShipments);
-
-// Bulk track multiple shipments
-router.post("/track/bulk", bulkTrackShipments);
+// Get buyer's shipments
+router.get("/buyer/:buyerId", getBuyerShipments);
 
 module.exports = router;

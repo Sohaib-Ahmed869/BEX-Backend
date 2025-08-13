@@ -678,6 +678,7 @@ exports.getProducts = async (req, res) => {
       is_Archived: false,
       is_flagged: false,
       list_for_selling: true,
+      is_active: true,
     };
 
     if (isAssociationDefined) {
